@@ -48,6 +48,62 @@ tolerance for *E. coli*, STEC, *Salmonella*, *Listeria*, and pathogenic
 
 ---
 
+## How it works
+
+Everything it reports comes from **public data** — Connecticut's product registry
+and the lab COAs that registry links to. The pipeline:
+
+1. **Download the registry.** It pulls Connecticut's public registry CSV
+   (dataset `egd5-wb6r`) and caches it locally so reruns are fast.
+2. **Pick the products.** It filters to the inhalable forms you asked for
+   (default: all inhalable, last 30 days) — flower, pre-rolls, vapes, carts,
+   concentrates, extracts. Edibles, tinctures, and topicals are excluded.
+3. **Fetch each COA.** For every product it opens the linked Certificate of
+   Analysis PDF from the state portal (warming a browser-like session so the
+   gated portal serves the file).
+4. **Read the PDF.** Text is extracted with `pdfplumber`; if a COA is a scanned
+   image, an optional OCR step (tesseract) is tried, otherwise it's listed in
+   `parse_failures.csv` for manual review — never silently dropped.
+5. **Parse each analyte carefully.** For every contaminant it locates the
+   analyte's **label** (e.g. "Arsenic", "Total Yeast & Mold", "Ochratoxin A") and
+   reads the result on that row — **never a stray nearby number**. It reads the
+   value against the **COA's own limit column, in the COA's own units**, which is
+   how it avoids unit-conversion mistakes (e.g. µg/kg vs µg/g).
+6. **Apply the rules.** Zero-tolerance pathogens (any detection) and over-limit
+   results → RED; a heavy metal or mycotoxin detected within its limit → ORANGE;
+   yeast & mold over the 10,000 CFU/g watch line (but legal) or a solvent within
+   limit → YELLOW. See "What the colors mean" above.
+7. **Write the report.** It produces the color-coded `flagged_products.pdf`, a
+   full `coa_results_full.csv` (every value parsed), and caches COAs so the next
+   run skips everything already scanned clean.
+
+It is deliberately conservative about claims: when a value can't be read with
+confidence, the COA is sent to manual review rather than guessed.
+
+---
+
+## ⚠️ Always cross-check against the actual COA — and report errors
+
+**This is a Beta tool, and you should treat every flag as a starting point, not a
+verdict.** COA PDFs come in many lab-specific layouts and are parsed
+automatically; mistakes happen.
+
+- **Verify before you rely on anything.** Each row in the report includes the
+  product's **COA registration number** (e.g. `MMBR.0033539`). Look that COA up
+  on the state portal, open it, and confirm the number with your own eyes before
+  drawing any conclusion or sharing it.
+- **A flag is a lead, not proof.** It means "an automated read of public data
+  warranted a closer look" — nothing about any lab's or producer's conduct.
+- **Found a misread? Please report it.** That's the single most helpful thing you
+  can do to make this better. Open an
+  [**issue**](../../issues/new?template=coa_parsing_issue.md) with the COA
+  number, what the tool said, and what the COA actually says (a screenshot of the
+  COA row is ideal). See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+Full terms in [`DISCLAIMER.md`](DISCLAIMER.md).
+
+---
+
 ## Run from source
 
 ```bash
