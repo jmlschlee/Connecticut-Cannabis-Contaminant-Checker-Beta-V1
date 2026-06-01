@@ -1,0 +1,11 @@
+# Python
+venv/
+coa-env/
+__pycache__/
+*.pyc
+
+# Program output (regenerated on every run; can be large)
+ct_audit_output/
+
+# OS
+.DS_Store

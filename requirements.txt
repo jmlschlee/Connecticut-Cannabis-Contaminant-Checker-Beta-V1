@@ -1,0 +1,12 @@
+# Connecticut Cannabis Contaminant Checker — Beta V1
+# Required
+requests==2.34.2
+pdfplumber==0.11.9
+reportlab==4.5.1
+
+# Optional: OCR for scanned-image COAs (also needs the system 'tesseract' binary)
+#   macOS:         brew install tesseract
+#   Ubuntu/Debian: sudo apt install tesseract-ocr
+#   Windows:       https://github.com/UB-Mannheim/tesseract/wiki
+pytesseract==0.3.13
+pypdfium2==5.8.0
