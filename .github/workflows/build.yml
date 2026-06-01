@@ -7,6 +7,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write   # lets the workflow attach the built binaries to the Release
+
 jobs:
   build:
     strategy:
