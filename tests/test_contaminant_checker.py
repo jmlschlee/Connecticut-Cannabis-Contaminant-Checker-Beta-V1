@@ -15,7 +15,7 @@ import os
 
 # Load the single-file program by path (its filename isn't import-friendly).
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_MOD = os.path.join(_HERE, "..", "connecticut_cannabis_contaminant_checker_beta_v1.py")
+_MOD = os.path.join(_HERE, "..", "cannascope_ct_v2.py")
 _spec = importlib.util.spec_from_file_location("cccc", _MOD)
 A = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(A)

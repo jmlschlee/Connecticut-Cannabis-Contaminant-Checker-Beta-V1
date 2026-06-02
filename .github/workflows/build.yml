@@ -1,7 +1,7 @@
-name: Build standalone executables
+name: Build CannaScope CT executables
 
-# Builds a single-file executable for Windows, macOS, and Linux whenever you
-# push a tag like v0.1.0-beta, and attaches them to the GitHub Release.
+# Builds a single-file executable for Windows, macOS, and Linux whenever you push
+# a tag like v0.2.0, and attaches them to the matching GitHub Release.
 on:
   push:
     tags: ["v*"]
@@ -16,11 +16,11 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            asset: ct-contaminant-checker-windows.exe
+            asset: CannaScope-CT-windows.exe
           - os: macos-latest
-            asset: ct-contaminant-checker-macos
+            asset: CannaScope-CT-macos
           - os: ubuntu-latest
-            asset: ct-contaminant-checker-linux
+            asset: CannaScope-CT-linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -28,12 +28,11 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt pyinstaller
-      - run: pyinstaller --onefile --name "${{ matrix.asset }}" connecticut_cannabis_contaminant_checker_beta_v1.py
+      - run: pyinstaller --onefile --name "${{ matrix.asset }}" cannascope_ct_v2.py
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
           path: dist/*
-      # Attach to a GitHub Release when triggered by a tag push
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:

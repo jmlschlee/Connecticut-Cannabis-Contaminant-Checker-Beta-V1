@@ -1,12 +1,17 @@
-# Connecticut Cannabis Contaminant Checker — Beta V1
-# Required
+# CannaScope CT — V2  (this repo's current version)
+# Core:
 requests==2.34.2
-pdfplumber==0.11.9
 reportlab==4.5.1
-
-# Optional: OCR for scanned-image COAs (also needs the system 'tesseract' binary)
-#   macOS:         brew install tesseract
-#   Ubuntu/Debian: sudo apt install tesseract-ocr
-#   Windows:       https://github.com/UB-Mannheim/tesseract/wiki
-pytesseract==0.3.13
 pypdfium2==5.8.0
+Pillow==12.2.0
+
+# OCR — lets the tool read scanned/image-only COAs (recommended).
+#   macOS uses Apple Vision via ocrmac (no extra system install needed).
+#   Other systems use tesseract (also `apt install tesseract-ocr` etc.).
+ocrmac==1.0.1 ; sys_platform == 'darwin'
+pytesseract==0.3.13 ; sys_platform != 'darwin'
+
+# ---------------------------------------------------------------------------
+# The older Beta V1 script (connecticut_cannabis_contaminant_checker_beta_v1.py)
+# instead needs:  pip install requests pdfplumber reportlab
+# (V1 remains available as a tagged release for anyone who wants it.)
