@@ -1285,6 +1285,19 @@ def _fmt_pct(pct):
     return f"{pct:.1f}%" if pct >= 1 else f"{pct:.2f}%"
 
 
+def _pct_label(pct):
+    """'% of limit' plus a signed over/under-the-limit delta, e.g. 153% -> the
+    contaminant is 53% OVER the limit -> '153.0% (+53%)'; 91.7% -> '91.7% (-8%)'.
+    The sign makes 'over vs under the limit' obvious at a glance."""
+    if pct is None:
+        return "N/A"
+    delta = pct - 100.0
+    mag = abs(delta)
+    dnum = f"{mag:.0f}" if mag >= 10 else f"{mag:.1f}"
+    sign = "+" if delta >= 0 else "−"          # + over the limit, − under
+    return f"{_fmt_pct(pct)} ({sign}{dnum}%)"
+
+
 def pct_color(pct) -> str:
     """Informational proximity shading (NOT a regulatory violation):
     100%+ = at/over the standard, 90%+ dark red, 75-89.9% orange,
@@ -1356,7 +1369,7 @@ def _pct_cell(p, which, watch=DEFAULT_WATCH) -> str:
             lines.append(f'<font size="6">{_esc(d["name"])}: N/A</font>')
         else:
             lines.append(f'<font color="{pct_color(pct)}"><b>'
-                         f'{_esc(d["name"])}: {_fmt_pct(pct)}</b></font>')
+                         f'{_esc(d["name"])}: {_pct_label(pct)}</b></font>')
     return "<br/>".join(lines)
 
 
@@ -1475,6 +1488,13 @@ def build_pdf(flagged: list, out_path: str, watch: int, report_no: int = 1,
             'sensitivities</b></font>',
             ParagraphStyle("key", parent=styles["Normal"], fontSize=8.5, leading=11,
                            alignment=1)),
+        Spacer(1, 3),
+        Paragraph(
+            "Each % shows the result as a share of that limit, with the amount "
+            "over/under it in parentheses: e.g. <b>153% (+53%)</b> = 53% OVER the "
+            "limit; <b>91.7% (&minus;8%)</b> = 8% under. (+) = over, (&minus;) = under.",
+            ParagraphStyle("pkey", parent=styles["Normal"], fontSize=8, leading=10,
+                           alignment=1)),
         Spacer(1, 12),
     ]
 
@@ -1507,10 +1527,10 @@ def build_pdf(flagged: list, out_path: str, watch: int, report_no: int = 1,
                 Paragraph(_esc(_fmt_value(d["value"], d["unit"])), cell),
                 Paragraph(_esc(_fmt_value(d["ct_limit"], d["unit"])), cell),
                 Paragraph(f'<font color="{pct_color(d["ct_pct"])}"><b>'
-                          f'{_fmt_pct(d["ct_pct"])}</b></font>', cell),
+                          f'{_pct_label(d["ct_pct"])}</b></font>', cell),
                 Paragraph(_esc(_fmt_value(d["my_limit"], d["unit"])), cell),
                 Paragraph(f'<font color="{pct_color(d["my_pct"])}"><b>'
-                          f'{_fmt_pct(d["my_pct"])}</b></font>', cell),
+                          f'{_pct_label(d["my_pct"])}</b></font>', cell),
             ])
         et = Table(edata, repeatRows=1,
                    colWidths=[0.3*inch, 2.5*inch, 2.0*inch, 1.45*inch, 1.35*inch,
