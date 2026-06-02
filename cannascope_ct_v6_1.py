@@ -1,47 +1,40 @@
 #!/usr/bin/env python3
 """
 CannaScope CT Beta V6.1
-============================
-Connecticut Cannabis Transparency Report — Master Validation, Format, DBA, COA,
-Internet-Source, Zero-Result, and Logic-Fix build.
+=======================
+Connecticut Cannabis Transparency Report — source-verified consumer-awareness and
+testing-pattern review.
 
-Every flag is a LEAD, not a conclusion. CannaScope CT Beta V6.1 does not claim fraud,
-unsafe product, or legal failure unless the live COA and the applicable
+Every flag is a LEAD, not a conclusion. CannaScope CT Beta V6.1 does not claim
+fraud, unsafe product, or legal failure unless the live COA and the applicable
 Connecticut legal limit directly support that claim.
 
-WHAT VERSION 7 ADDS (on top of the validated V5 / V4 contaminant + cannabinoid engine)
-  * ZERO-TRUST VALIDATION — every flagged row is re-checked against its live COA
-    PDF (link works, COA/registration number present, reported value present) and
-    given a Live COA Match Status. Rows that are not a Verified Exact / Partial
-    Match are pulled from the ranked sections into a COA Verification Queue.
-  * CLICKABLE COA LINKS EVERYWHERE — every COA number is a blue hyperlink to the
-    source PDF; missing links are marked "COA LINK MISSING — VERIFY MANUALLY".
-  * COMBINED PRODUCER / DBA COLUMN — "Common / Brand (Legal Entity)" with a
-    source-confidence score; unconfirmed DBAs are searched and otherwise marked
-    "DBA Not Confirmed" (never invented).
-  * ZERO-RESULTS ARE PRESUMED PARSER ERRORS — any expected category returning
-    zero is re-checked against the raw parsed data; a true zero is stated plainly,
-    a suspicious zero raises a DRAFT WARNING and routes to a Zero-Result
-    Verification Queue.
-  * HIGH-THC FLOWER REVIEW = NON-INFUSED FLOWER ONLY — vapes, concentrates,
-    extracts, hash/THCA-infused pre-rolls and infused blunts move to a separate
-    "Infused / Extract Potency Reference" section (not a flower abnormality).
-  * THC PARSER-CONFLICT GUARD — no scientific notation in public tables; a
-    Total THC of 0% alongside a 35%+ active-cannabinoid reading is flagged
-    "Potency Parser Conflict — Needs Manual Review" and kept OUT of rankings.
-  * SEPARATE ANALYTE TABLES — Yeast & Mold, Total Aerobic Bacteria, Arsenic,
-    Chromium, Cadmium, Lead, Mercury, Pesticides, Residual Solvents, Mycotoxins,
-    and Pathogens each get their own ranked, lean table.
-  * SELF-AUDIT + DEBUG LOG + DRAFT GATING — an automatic major-error scan, a
-    machine-readable debug log, and a hard rule: if major validation issues
-    remain, the report is exported as "DRAFT — MAJOR VALIDATION ISSUES REMAIN".
+WHAT V6.1 DELIVERS (on top of the validated core contaminant + cannabinoid engine)
+  * THREE-CATEGORY PRODUCT TAXONOMY — flower (non-infused), infused flower products
+    (infused joints/blunts/pre-rolls), and vapes/concentrates/extracts are kept
+    STRICTLY separate. Vapes are never grouped with infused products.
+  * PER-LINE-ITEM COA VERIFICATION (anti-hallucination) — every flagged value must
+    literally appear in its COA text (matched as a distinct number) or it is
+    excluded from all findings.
+  * IMPLAUSIBLE-VALUE REJECTION — a value >1000x its limit, an absurd magnitude, or
+    a flower cannabinoid reading above 45% is rejected as an OCR/parse error.
+  * CRASH-PROOF + SELF-PACING — OCR runs in an isolated subprocess (a native
+    segfault kills only that child), every COA is wrapped so nothing can kill a
+    worker, a predictive overload backoff (psutil/load-average) self-paces on big
+    runs, and a deferred low-load pass retries anything still unreadable.
+  * ZERO-TRUST VALIDATION, clickable COA links, combined Producer/DBA column with a
+    source-confidence score, zero-result verification, separate per-analyte tables,
+    self-audit + debug log, and PASS / PASS WITH WARNINGS / DRAFT / FAIL status.
+  * REPORTS ARE NEVER OVERWRITTEN — each is uniquely named
+    CannaScope_CT_Beta_V6_1_Report_<N>_MM_DD_YYYY.pdf, numbered sequentially from 1.
 
-REUSES the V5 engine (imported) for download / OCR / contaminant + cannabinoid
-parsing / flagging, so the validated detection logic is unchanged.
+REUSES the validated core engine (imported) for download / OCR / contaminant +
+cannabinoid parsing / flagging, so the detection logic is unchanged.
 
-REQUIREMENTS:  pip install requests reportlab pypdfium2  (OCR: ocrmac / pytesseract)
-  Place cannascope_ct_v5.py, cannascope_ct_v4.py, ct_cannabis_names.py beside this.
-TYPICAL RUN:  python cannascope_ct_v7.py --days 60
+REQUIREMENTS:  pip install requests reportlab pypdfium2  (OCR: ocrmac / pytesseract;
+  optional psutil for sharper overload detection). Place cannascope_ct_v5.py,
+  cannascope_ct_v4.py, ct_cannabis_names.py, cannascope_ocr_worker.py beside this.
+TYPICAL RUN:  python cannascope_ct_v6_1.py --since 2024-01-01 --until 2024-12-31
 """
 
 import argparse
@@ -70,8 +63,7 @@ ProductV5 = v5.ProductV5
 # ============================================================================
 # Config
 # ============================================================================
-# Public release name. (Internal development builds used "V7" naming; the
-# public-facing release is standardized as CannaScope CT Beta V6.1 — see CHANGELOG.)
+# Version label shown on the report cover, in output filenames, and in the footer.
 APP_NAME = "CannaScope CT Beta V6.1"
 REPORT_TITLE = "Connecticut Cannabis Transparency Report"
 REPORT_SUBTITLE = "Source-Verified Consumer Awareness & Testing Pattern Review"
@@ -235,7 +227,7 @@ def test_date(p) -> str:
 
 
 # ============================================================================
-# Registry (reuse V5 loader but route to V7 dirs)
+# Registry (reuse the core loader but route to V6.1 dirs)
 # ============================================================================
 def load_registry(session, refresh=False):
     v5.OUT_DIR = OUT_DIR
@@ -244,7 +236,7 @@ def load_registry(session, refresh=False):
 
 
 # ============================================================================
-# Flower / infused classification (V7 rule: High-THC review = non-infused flower)
+# Flower / infused classification (V6.1 rule: cannabinoid review split into flower / infused / extract)
 # ============================================================================
 def _hay(p):
     return f"{p.dosage_form} {p.product_name}".lower()
@@ -332,7 +324,7 @@ def thc_review_value(p):
 # ============================================================================
 # Producer / DBA identity (combined column + source confidence)
 # ============================================================================
-# V7 identity overlay: legal-entity (normalized) -> dict(common, brands, parent,
+# Identity overlay: legal-entity (normalized) -> dict(common, brands, parent,
 # confidence, source). Layered over v5.IDENTITY_TABLE. Brands are confirmed from
 # the live CT product registry (the product names literally carry the brand) AND
 # public sources. Entries pending live confirmation are marked accordingly and the
@@ -348,7 +340,7 @@ def _norm(s):
 # websites, and reputable news. CONFIRMED = corroborated public source; LIKELY =
 # strong single source; UNCONFIRMED = no public source found (shown as "DBA Needs
 # Verification", never invented). This dict IS the program's identity cache.
-_V7_RAW = {
+_IDENTITY_RAW = {
     "Connecticut Pharmaceutical Solutions LLC": dict(
         common="CTPharma", brands=["Savvy", "Zen Leaf"], parent="Verano Holdings",
         confidence="CONFIRMED", source="ctpharma.com/savvy; Verano press releases (Rocky Hill, CT)"),
@@ -405,7 +397,7 @@ _V7_RAW = {
         common="", brands=[], parent="", confidence="UNCONFIRMED",
         source="no public consumer brand found — resolve via portal.ct.gov/dcp brand registry"),
 }
-V7_IDENTITY = {_norm(k): v for k, v in _V7_RAW.items()}
+IDENTITY_OVERLAY = {_norm(k): v for k, v in _IDENTITY_RAW.items()}
 
 
 class Identity:
@@ -420,7 +412,7 @@ class Identity:
 
     def __init__(self, pmap, all_products):
         self.pmap = pmap
-        self.cache = {}            # in-memory only (per run); the V7_IDENTITY overlay
+        self.cache = {}            # in-memory only (per run); the IDENTITY_OVERLAY
         # is the authoritative baked-in identity cache, so resolved labels are NOT
         # persisted to disk (that would let a stale file override an overlay edit).
         # brands actually seen per producer in the live registry (COA-confirmed)
@@ -443,7 +435,7 @@ class Identity:
 
     def _lookup(self, legal, key):
         legal_disp = tcase(legal)
-        overlay = V7_IDENTITY.get(key)
+        overlay = IDENTITY_OVERLAY.get(key)
         v5rec = v5.IDENTITY_TABLE.get(key)
         # COA-confirmed brand(s) straight from the registry product names
         coa_brands = [b for b, _ in self.reg_brands.get(key, Counter()).most_common(3)]
@@ -713,7 +705,7 @@ def enable_isolated_ocr():
 
 
 # ============================================================================
-# Worker — parse (V5 engine) + V7 validation, retaining text only long enough
+# Worker — parse (core engine) + V6.1 validation, retaining text only long enough
 # ============================================================================
 def process_product(p, session, watch):
     """Never raises — any per-COA failure (download, parse, OCR) is caught and the
