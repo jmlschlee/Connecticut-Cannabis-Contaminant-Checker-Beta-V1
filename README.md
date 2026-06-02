@@ -1,128 +1,132 @@
-# CannaScope CT Beta Version 4
+# CannaScope Beta V5
 
-## ⬇️ Download — CannaScope CT Beta 4 (latest)
+**Connecticut Cannabis Transparency Report — Source-Verified Consumer Awareness & Testing Pattern Review**
 
-Pick your operating system. Each is a self-contained package (unzip and run).
+> **Every flag is a lead, not a conclusion.** CannaScope Beta V5 does not claim fraud, unsafe product, or legal failure unless the live COA and the applicable Connecticut legal limit directly support that claim. Verify every product against its COA.
+
+CannaScope reads Connecticut's public cannabis product registry, opens each product's lab Certificate of Analysis (COA), extracts the full contaminant and cannabinoid panel, and produces a clean, source-verified PDF that surfaces products worth a closer look — for consumers, journalists, regulators, legislators, and medical patients.
+
+---
+
+## ⬇️ Download CannaScope Beta V5
+
+Grab the package for your operating system, unzip it, and run the launcher.
 
 | Operating system | Download |
 |---|---|
-| 🪟 **Windows** | **[CannaScope-CT-V4-windows.zip](https://github.com/jmlschlee/CannaScope-CT-Beta-4/releases/latest/download/CannaScope-CT-V4-windows.zip)** |
-| 🍎 **macOS** | **[CannaScope-CT-V4-macos.zip](https://github.com/jmlschlee/CannaScope-CT-Beta-4/releases/latest/download/CannaScope-CT-V4-macos.zip)** |
-| 🐧 **Linux** | **[CannaScope-CT-V4-linux.zip](https://github.com/jmlschlee/CannaScope-CT-Beta-4/releases/latest/download/CannaScope-CT-V4-linux.zip)** |
+| 🪟 **Windows** | **`CannaScope_Beta_V5_Windows.zip`** → unzip → double-click **`run.bat`** |
+| 🍎 **macOS** | **`CannaScope_Beta_V5_macOS.zip`** → unzip → run **`./run.sh`** |
+| 🐧 **Linux** | **`CannaScope_Beta_V5_Linux.zip`** → unzip → run **`./run.sh`** |
 
-All builds (and older versions) are on the **[Releases page](https://github.com/jmlschlee/CannaScope-CT-Beta-4/releases)**. See **[INSTALL.md](INSTALL.md)** for step-by-step setup.
+> Downloads are published on the [**Releases**](../../releases) page under tag `v5.0.0-beta`. The latest generated report, **`CannaScope_Beta_V5_Report.pdf`**, is attached to the release as well.
 
----
-
-
-**A consumer-awareness tool for Connecticut cannabis.** CannaScope CT pulls
-Connecticut's public cannabis product registry, opens **every** product's lab
-Certificate of Analysis (COA) across **all producers and all CT labs**, extracts
-the full contaminant panel, and produces a clear, severity-sorted PDF that shows
-how close each result is to **two** thresholds — with a **clickable link to every
-source COA** so you can verify each result yourself.
-
-> Every flag is a **LEAD, not a conclusion. Verify each product against its COA.**
-> Nothing about any lab's or producer's conduct is asserted.
+Each launcher creates a local virtual environment, installs the dependencies, and runs the tool. Python 3.10+ is required.
 
 ---
 
-## Which file do I download?
+## What CannaScope Beta V5 does
 
-| Your computer | Download | Then |
-|---|---|---|
-| **Windows** | `CannaScope-CT-V4-windows.zip` | unzip, double-click **Run CannaScope CT.bat** |
-| **macOS** | `CannaScope-CT-V4-macos.zip` | unzip, right-click **Run CannaScope CT.command** → Open |
-| **Linux** | `CannaScope-CT-V4-linux.zip` | unzip, run **./run.sh** |
+1. **Pulls the data** — downloads Connecticut's *Medical Marijuana and Adult-Use Cannabis Product Registry* (data.ct.gov dataset `egd5-wb6r`).
+2. **Reads every COA** — opens each product's lab-analysis PDF (with OCR fallback for scanned COAs) and extracts the full panel: yeast & mold, total aerobic bacteria, heavy metals (arsenic, chromium, cadmium, lead, mercury), mycotoxins, residual solvents, pathogens, and cannabinoid potency.
+3. **Compares to two thresholds** — the **Connecticut legal limit** (the COA's own action limit) and the stricter **CannaScope Limit** (a consumer-awareness threshold, *not* a legal-failure standard).
+4. **Validates every finding** — re-checks each flagged row against its live COA, scores producer/DBA identity against public sources, and treats unexpected zero-results as suspected parser errors until verified.
+5. **Publishes a professional PDF** — `CannaScope_Beta_V5_Report.pdf`, with clickable COA links, testing dates, producer and lab trends, and clear severity coloring.
 
-The launcher installs everything on first run. **Requires Python 3.9+** and an
-internet connection. Each run writes a **new numbered report**
-(`CannaScope CT Beta Version 4 - Flagged Products - N.pdf`) so prior reports are
-never overwritten, and also drops a copy at the top of the run folder.
+### What is a COA?
 
-See **INSTALL.md** for detailed per-OS instructions.
+A **Certificate of Analysis** is the lab report a licensed testing laboratory issues for a cannabis batch. It lists the measured contaminant and potency values and the action limits they are compared against. CannaScope links directly to the source COA for every finding so you can verify it yourself.
 
----
+### What "flagged" means
 
-## Two thresholds: Connecticut Legal Limit vs. CannaScope CT Standard
+A product is **flagged** when a *trustworthy, quantified* measurement crosses the CannaScope consumer-awareness threshold (or a zero-tolerance pathogen is reported detected, or a pesticide/solvent panel fails). A flag is a **lead for verification**, never a verdict.
 
-Connecticut law sets the **Connecticut Legal Limit** (where a product fails).
-CannaScope adds a stricter **CannaScope CT Standard** so you can see risk *before*
-a product would legally fail.
+### Color system (per-measurement severity)
 
-> **CannaScope CT Standard is a stricter consumer-awareness threshold. It is not a
-> Connecticut legal failure standard.** Exceeding it is **not** illegal.
+| Color | Meaning |
+|---|---|
+| 🔴 **RED** | Near or over the Connecticut legal limit |
+| 🟠 **ORANGE** | Elevated |
+| 🟡 **YELLOW** | Above the CannaScope threshold |
+| 🟢 **GREEN** | Below the threshold (not flagged) |
 
-| Contaminant | Connecticut Legal Limit | CannaScope CT Standard |
-|---|---|---|
-| Total Yeast & Mold | 100,000 CFU/g | **10,000 CFU/g** |
-| Total Aerobic Bacteria | 100,000 CFU/g | **10,000 CFU/g** |
-| Heavy Metals, Mycotoxins, Pesticides, other regulated contaminants | per CT action level | **50% of the Connecticut Legal Limit** |
+### Key terms
 
-Examples (50% rule): Arsenic 200 → **100** µg/kg · Lead 500 → **250** µg/kg ·
-Chromium 600 → **300** µg/kg · Cadmium 1,500 → **750** µg/kg.
+- **CT % Of Limit** — measured value ÷ Connecticut legal limit × 100.
+- **CannaScope Limit** — the stricter consumer-awareness threshold (Yeast & Mold / Total Aerobic Bacteria = 10,000 CFU/g; every other contaminant = 50% of the CT legal limit).
+- **Difference From CannaScope** — how far above (+) or below (−) the CannaScope threshold a result sits.
+- **Testing Date** — the COA's test/sample date (never the report-generation date).
+- **High Cannabinoid Content / High THC Content Review** — non-infused flower whose reliable cannabinoid reading exceeds 35%. This identifies *unusually high cannabinoid content for review* — it is **not** an accusation against any producer.
+- **Infused & Extract Potency Comparison Reference** — concentrated products (infused pre-rolls, hash/THCA-infused items, vapes, concentrates, extracts) shown to compare against normal flower. High potency here is expected by design and is **not** a flower abnormality.
+- **Possible Remediation / Unusually Low Microbial Load** — flower with an unusually low or ND microbial reading. **This is not proof of remediation.** It is a consumer-awareness lead and should be verified against the live COA.
+- **PASS WITH WARNINGS** — the validation status when the report is publishable but non-blocking issues exist (e.g. potency-parser conflicts held out of rankings, or COAs that could not be auto-confirmed). Status values: `PASS`, `PASS WITH WARNINGS`, `DRAFT`, `FAIL`.
 
-Each contaminant row shows:
+### What the report does **not** claim
 
-- **CT Limit %** = Measured Value ÷ Connecticut Legal Limit × 100 — e.g.
-  `91.7% of CT Limit`.
-- **vs CannaScope CT Standard** = (Measured Value − CannaScope CT Standard) ÷
-  CannaScope CT Standard × 100 — e.g. `+83.4% Over CannaScope CT Standard`,
-  `0% At CannaScope CT Standard`, or `-20.0% Below CannaScope CT Standard`.
-
-The yeast/mold & aerobic CannaScope CT Standard is adjustable with `--threshold`
-(default 10,000).
+CannaScope does **not** assert that any product is fraudulent, unsafe, illegally produced, or that it failed Connecticut testing. CannaScope thresholds are stricter than Connecticut's legal limits; a flag means a result crossed a *consumer-awareness* threshold and is worth verifying — nothing more.
 
 ---
 
-## What Version 4 adds
+## How to run it
 
-- **CannaScope CT Standard** reported alongside the **Connecticut Legal Limit**,
-  with the two clear columns above.
-- **Executive Summary** with five sections: Products Closest to Connecticut Legal
-  Limits, Products Furthest Above CannaScope CT Standard, Top Producers by Flag
-  Count, Top Contaminants Detected, and Most Frequently Flagged Labs.
-- **Date Created** and **Time Created** on every report (header + footer).
-- **Cleaner typography** — cross-platform font, larger text, better spacing,
-  consistent capitalization, COA links blue/underlined/clickable, and the
-  disclaimer on every page.
+If you downloaded a release ZIP, just run the launcher (`run.bat` on Windows, `./run.sh` on macOS/Linux).
 
-Carried over from earlier versions: all product types, recognizable producer
-DBA + legal names, normalized lab names, OCR for scanned COAs, Northeast
-Laboratories columnar parsing, per-lab analysis summary, and a name coverage
-audit so every lab and producer is accounted for.
-
-### What RED / ORANGE / YELLOW mean
-- **RED = Do Not Consume** — a prohibited detection, an over-Connecticut-Legal-Limit
-  result, or a failed pesticide/solvent panel.
-- **ORANGE = High Caution** if sensitive.
-- **YELLOW = Moderate Caution** — exceeds the stricter CannaScope CT Standard but
-  remains LEGAL in Connecticut.
-
----
-
-## Typical use
+To run from source:
 
 ```bash
-python cannascope_ct_v4.py                 # last 60 days, all product types (default)
-python cannascope_ct_v4.py --days 180      # wider window (more labs/products)
-python cannascope_ct_v4.py --threshold 5000   # stricter CannaScope CT Standard for yeast/mold & aerobic
+pip install -r requirements.txt          # requests reportlab pypdfium2 (+ optional OCR)
+python cannascope_beta_v5.py              # defaults: last 60 days, all product types
 ```
 
-> **macOS "can't be opened" / Windows "protected your PC"?** Normal block of a
-> downloaded script. macOS: right-click the launcher → Open → Open. Windows: More
-> info → Run anyway.
+Common options:
+
+```bash
+python cannascope_beta_v5.py --days 365             # one-year window
+python cannascope_beta_v5.py --since 2026-01-01     # explicit start date
+python cannascope_beta_v5.py --forms flower         # flower only
+python cannascope_beta_v5.py --limit 100            # cap COAs scanned (quick test)
+python cannascope_beta_v5.py --workers 12           # concurrency
+```
+
+Outputs are written to `CannaScope Beta V5 - Reports/`, and the report is also copied to the working folder as **`CannaScope_Beta_V5_Report.pdf`**, alongside CSV exports (per-contaminant severity tables, high-cannabinoid review, producer/lab identity + confidence, validation queues, and a full per-product scan).
+
+## How to build a release ZIP
+
+```bash
+# from the repository root
+zip -r CannaScope_Beta_V5_macOS.zip   CannaScope_Beta_V5 -x '*/.venv/*'
+zip -r CannaScope_Beta_V5_Linux.zip   CannaScope_Beta_V5 -x '*/.venv/*'
+zip -r CannaScope_Beta_V5_Windows.zip CannaScope_Beta_V5 -x '*/.venv/*'
+```
+
+(The three packages contain the same source; they differ only in the included launcher — `run.bat` for Windows, `run.sh` for macOS/Linux.)
 
 ---
 
-## Please cross-check, and report errors
+## Requirements
 
-Every flag is a LEAD to verify against the source COA — click the COA number in
-any row to open the official COA and confirm. Found a misread? Please report it:
-https://github.com/jmlschlee/CannaScope-CT-Beta-4/issues
+- **Python 3.10+**
+- `requests`, `reportlab`, `pypdfium2`
+- Optional OCR for scanned COAs: `ocrmac` (macOS) or `pytesseract` + the `tesseract` binary (other platforms)
 
-Earlier versions remain available, unchanged: **V3** (`v0.3.0`), **V2**
-(`v0.2.0`), and the original **Beta V1** (`v0.1.0-beta`).
+---
 
-*Standards encoded: Conn. Agencies Regs. §21a-408-60; DCP policy. Source data: CT
-Open Data registry `egd5-wb6r`.*
+## Version history
+
+CannaScope grew through several internal development builds. **The public-facing release is standardized as CannaScope Beta V5.** Earlier builds carried "V7" naming during development; they are preserved for transparency, and no older version has been deleted. See [`CHANGELOG.md`](CHANGELOG.md) for the full history.
+
+- **CannaScope Beta V5** — public release. Source-verified report with testing dates, CT/CannaScope limit comparisons, producer & lab trends, high-cannabinoid review, infused/extract comparison, possible-remediation safeguards, clickable COA links, and a full validation/diagnostics appendix.
+- Earlier public builds — **Beta V1** (contaminant checker), **CannaScope CT V2 / V3 / V4** — and the internal **"V7"** report builds all remain in the repository history and tree, with their downloads under `downloads/`. No older version was removed.
+
+---
+
+## Documentation
+
+- [`DISCLAIMER.md`](DISCLAIMER.md) — full disclaimer and limitations
+- [`docs/user-guide.md`](docs/user-guide.md) — running the tool and reading the report
+- [`docs/report-fields.md`](docs/report-fields.md) — every column and term explained
+- [`docs/validation-methodology.md`](docs/validation-methodology.md) — how findings are validated
+- [`CHANGELOG.md`](CHANGELOG.md) / [`RELEASE_NOTES.md`](RELEASE_NOTES.md) — what changed
+
+---
+
+*CannaScope Beta V5 is an independent consumer-awareness project. It is not affiliated with the State of Connecticut or any cannabis producer or laboratory.*

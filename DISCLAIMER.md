@@ -1,39 +1,32 @@
 # Disclaimer
 
-**Connecticut Cannabis Contaminant Checker is an independent, non-commercial
-tool for consumer awareness. It is provided "as is," in Beta, with no warranty.**
+**Every flag is a lead, not a conclusion. CannaScope Beta V5 does not claim fraud, unsafe product, or legal failure unless the live COA and the applicable Connecticut legal limit directly support that claim.**
 
-Please read and understand the following before using this tool or relying on
-its output.
+## What CannaScope is
 
-## It produces leads, not conclusions
-Every flag the tool raises is a **lead to verify against the original
-Certificate of Analysis (COA)** — never a finding, accusation, or conclusion.
-COA PDFs come in many lab-specific formats and are parsed automatically and
-imperfectly. Values can be misread. **Always open the linked COA (each row
-includes its registration number) and confirm before relying on anything.**
+CannaScope Beta V5 is an independent, consumer-awareness tool. It reads Connecticut's public cannabis product registry and the linked laboratory Certificates of Analysis (COAs), and it surfaces products whose measured results cross a **stricter-than-legal consumer-awareness threshold** so that a human can verify them against the source COA.
 
-## No assertion about any person or company
-This tool makes **no assertion** about the licensure, conduct, quality, or
-safety practices of any laboratory, producer, brand, or dispensary. "Flagged"
-means only that an automated reading of public data warranted a closer look.
+## What CannaScope is **not**
 
-## Not legal, medical, or professional advice
-Nothing here is legal, medical, regulatory, or professional advice. The
-"watch threshold" (default 10,000 CFU/g yeast & mold) is **stricter than
-Connecticut law** and reflects only this tool's conservative choice for
-sensitive consumers — products between the watch line and the legal limit are
-**legal to sell in Connecticut**.
+CannaScope does **not**:
 
-## Data source and accuracy
-Data is read from Connecticut's **public** Medical Marijuana & Adult-Use
-Cannabis Product Registry (dataset `egd5-wb6r`) and the COA PDFs it links to.
-The tool is not affiliated with, endorsed by, or operated by the State of
-Connecticut, the Department of Consumer Protection, or any testing lab or
-producer. Accuracy is not guaranteed; the registry and COAs may contain their
-own errors.
+- claim a product is fraudulent, fake, or mislabeled;
+- claim a product is unsafe or contaminated with certainty;
+- claim a product failed Connecticut testing or violated any law;
+- accuse any producer or laboratory of wrongdoing.
 
-## Use at your own risk
-By using this tool you accept that you do so at your own risk and that the
-authors are not liable for any decision made based on its output. See `LICENSE`
-for the full warranty disclaimer.
+CannaScope's thresholds (the **CannaScope Limit**) are intentionally **stricter** than Connecticut's legal limits. A product crossing a CannaScope threshold has **not** necessarily failed any Connecticut requirement.
+
+## Specific cautions
+
+- **"Flagged"** means a trustworthy, quantified measurement crossed a consumer-awareness threshold. It is a lead for verification, not a verdict.
+- **"Possible Remediation / Unusually Low Microbial Load"** is **not** proof that any product was remediated. It is a consumer-awareness lead based on unusually low or non-detect microbial readings, which can be entirely normal, and must be verified against the live COA.
+- **"High Cannabinoid Content / High THC Content"** identifies *unusually high cannabinoid content for review*. It is not an accusation of falsification.
+- **Producer / DBA identity** is resolved from public records (data.ct.gov, CT eLicense, the DCP brand registry, and cited public sources) with a confidence score. Low-confidence or unconfirmed mappings are marked and should be verified manually; names are never invented.
+- **Parsed values can contain errors.** Always verify any finding against the original COA, which is linked directly from every finding row.
+
+## Verify everything
+
+Every finding links to its source COA. Before drawing any conclusion, open the COA and confirm the product, the measured value, the unit, the limit, and the testing date.
+
+CannaScope Beta V5 is not affiliated with the State of Connecticut or with any cannabis producer or laboratory.

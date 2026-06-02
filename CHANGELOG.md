@@ -2,6 +2,39 @@
 
 All notable changes to this project are documented here.
 
+## [5.0.0-beta] — CannaScope Beta V5 — public release
+
+**Standardized the public-facing version name to CannaScope Beta V5.** Internal
+development used "V7" report-build naming; those builds and all earlier versions
+(Beta V1, CannaScope CT V2/V3/V4) are preserved in history — nothing was deleted.
+
+### Added
+- **Testing Date** column throughout every product-level table (COA test/sample
+  date; never the report-generation date; registry date only as a fallback).
+- **CT Legal Limit** and **CannaScope Limit** comparison columns, plus
+  **CT % Of Limit** and **Difference From CannaScope** — full numeric context per row.
+- **Producer Trends** and **Lab Trends** under the Executive Summary.
+- **High Cannabinoid Content / High THC Content Findings** (non-infused flower > 35%).
+- **Infused & Extract Potency Comparison Reference**.
+- **Possible Remediation / Unusually Low Microbial Load Review** with cautious
+  wording safeguards (explicitly *not* proof of remediation).
+- Expanded Executive Summary dashboard (top heavy-metal / microbial / high-cannabinoid /
+  producer / lab / possible-remediation findings) and per-measurement severity colors.
+
+### Improved
+- Clickable COA links on every finding; live COA row validation (substantive
+  mismatches only); PASS / PASS WITH WARNINGS / DRAFT / FAIL status; zero-result
+  verification; source-verified producer/DBA identity with confidence scores.
+- Larger typography, centered headers, findings-first order, diagnostics at the end.
+
+### Packaging
+- New entry script `cannascope_beta_v5.py` (engine modules `cannascope_ct_v5.py`,
+  `cannascope_ct_v4.py`, `ct_cannabis_names.py`).
+- Per-OS packages `CannaScope_Beta_V5_{Windows,macOS,Linux}.zip` and sample report
+  `CannaScope_Beta_V5_Report.pdf`.
+- Docs: README, RELEASE_NOTES, DISCLAIMER, docs/user-guide, docs/validation-methodology,
+  docs/report-fields.
+
 ## [0.4.0] — CannaScope CT Beta Version 4 — 2026-06-02
 
 ### CannaScope CT Beta Version 4
