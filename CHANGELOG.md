@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [10.0.0-beta] — 2026-06-03 — CannaScope CT Beta V10 — current release (pre-release)
+## [10.0.0-beta] — 2026-06-03 — CannaScope CT Beta V10 — current release (beta)
 
 Additive release. All prior versions remain live and downloadable, unchanged. Repository
 renamed to `CannaScope-CT` (stable name; GitHub redirect from the old name preserved — the
