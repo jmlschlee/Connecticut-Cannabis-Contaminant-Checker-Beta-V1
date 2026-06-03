@@ -16,6 +16,14 @@
 
 ---
 
+> ### 🆕 CannaScope CT **V9 Beta** — pre-release now available
+> New in V9: a **Compliance Screening** section (potential Connecticut statutory/regulatory flags to *investigate*, with cited authorities and clickable COA links) and a **CT Cannabis Ombudsman — Medical Patient Safety Review** section (products that *passed* testing but came closest to a CT action limit, ranked). Review aids — not legal or medical advice. Stable **V7.2** below remains the recommended general download.
+>
+> **V9 Beta downloads:** [Windows](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/download/v9.0.0-beta/CannaScopeCT-v9.0.0-beta-windows.zip) · [macOS](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/download/v9.0.0-beta/CannaScopeCT-v9.0.0-beta-macos.zip) · [Linux](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/download/v9.0.0-beta/CannaScopeCT-v9.0.0-beta-linux.zip) · [release notes »](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/tag/v9.0.0-beta)
+
+---
+
+
 ## ⬇️ Download — pick your operating system
 
 > **One self-contained file.** Each download contains the entire program plus a one-click launcher, quick-start guide, and license. No companion files, no build step.
