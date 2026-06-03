@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented here.
 
+## [9.0.0-beta] — CannaScope CT V9 Beta — pre-release
+
+Additive release. All prior releases remain live and downloadable, unchanged. Marked as a
+pre-release; stable V7.2 remains the recommended general download.
+
+### Added
+- **Compliance Screening Engine** — surfaces *potential* Connecticut statutory/regulatory
+  matters (authority set: CGS Ch. 420h / RERACA, CGS Ch. 420f, DCP Policies & Procedures
+  eff. 2024-11-12, RCSA Sec. 21a-408, and the Public Acts amendment layer — resolve in
+  eRegulations.ct.gov). Each item is a review flag with cited authority, status, severity,
+  confidence, and recommended next step. Flags to investigate, not legal determinations.
+- **"Potential Statute & Regulatory Flags to Evaluate" PDF section** (near the end of every
+  report): results over the CT legal limit, detected zero-tolerance pathogens, failed
+  pesticide/solvent panels, and high-cannabinoid potency-label reconciliation
+  (0.877×THCA + Δ9 vs reported Total THC), each with a clickable COA link; renders even when
+  empty.
+- **"CT Cannabis Ombudsman — Medical Patient Safety Review" PDF section** (immediately after
+  the flags): products that PASSED testing but came closest to a CT action limit, ranked by
+  margin across all contaminant classes (tunable threshold, default 80%), with closeness
+  tiers, per-class patient notes, and clickable COA links. Advisory; not medical advice.
+- Pre-built self-contained downloads for Windows, macOS, and Linux.
+
+### Notes
+- Carries the V8.x accuracy work: field-aware COA extraction across lab/year formats,
+  ND/limit/LOQ/LOD never published as measurements, regulatory-limit matches routed to
+  manual review.
+- Pre-release for evaluation; compliance and ombudsman outputs are review aids, not legal or
+  medical advice.
+
+
 ## [5.0.0-beta] — CannaScope Beta V5 — public release
 
 **Standardized the public-facing version name to CannaScope Beta V5.** Internal
