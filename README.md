@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌿 CannaScope CT Beta V11
+# 🌿 CannaScope CT Beta V11.1
 
 ### Connecticut Cannabis Transparency Report
 **Source-verified consumer-awareness & testing-pattern review**
@@ -16,10 +16,10 @@
 
 ---
 
-> ### 🆕 CannaScope CT **V11 Beta** — now available
-> **New in V11:** cleaner two-report naming — the whole-market run is the **Statewide Transparency Report** (`statewide`) and the single-product run is the **Personalized Product Concern Report** (`concern`), each with its own output folder. The statewide report's first pages were re-spaced for readability (the three top summary tables now flow cleanly), with a findings-first **Findings at a Glance** summary and concise trend notes. The consumer report gained a **PRODUCT OF CONCERN** header, a **Complaint Investigation Summary**, **severity tiers**, legal-entity + brand producer names, **Producer Trend Context**, smarter sibling-COA comparison, and a **“Why this product was matched”** explanation. Carries forward the **Potential Statute & Regulatory Flags** and **CT Cannabis Ombudsman — Medical Patient Safety Review** sections, with COA dates + clickable COA links. Advisory — not legal or medical advice. All prior versions remain available below.
+> ### 🆕 CannaScope CT **V11.1 Beta** — emergency COA integrity patch (use this)
+> **V11.1 is a data-integrity release — please use it instead of V11.** It hardens the core promise: if the report shows a result, you can click that row's COA link and see that exact result in that exact document. Every published value is now independently re-verified in its OWN linked COA, and anything that cannot be confirmed is excluded and routed to manual review — enforced in BOTH the **Statewide Transparency Report** (`statewide`) and the **Personalized Product Concern Report** (`concern`). Adds a provenance audit + COA Source Mismatch + Multiple-COA Alert CSVs, a “COA Source-Binding Audit” diagnostics panel, a new **FAIL SOURCE VALIDATION** status, and baked-in speed caches (embedded registry + opt-in `--fast-cached`). Advisory — not legal or medical advice. All prior versions remain available below.
 >
-> **V11 Beta downloads:** [Windows](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.0.0-beta/CannaScope.CT.Beta.V11.-.Windows.zip) · [macOS](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.0.0-beta/CannaScope.CT.Beta.V11.-.macOS.zip) · [Linux](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.0.0-beta/CannaScope.CT.Beta.V11.-.Linux.zip) · [release notes »](https://github.com/jmlschlee/CannaScope-CT/releases/tag/v11.0.0-beta)
+> **V11.1 Beta downloads:** [Windows](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.1.0-beta/CannaScope.CT.Beta.V11.1.-.Windows.zip) · [macOS](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.1.0-beta/CannaScope.CT.Beta.V11.1.-.macOS.zip) · [Linux](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.1.0-beta/CannaScope.CT.Beta.V11.1.-.Linux.zip) · [release notes »](https://github.com/jmlschlee/CannaScope-CT/releases/tag/v11.1.0-beta)
 
 ---
 
@@ -30,12 +30,12 @@
 
 | Operating System | Download | How to launch |
 |---|---|---|
-| 🪟 **Windows** | **[CannaScope CT Beta V11 - Windows.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.0.0-beta/CannaScope.CT.Beta.V11.-.Windows.zip)** | unzip → `run.bat statewide --days 90` |
-| 🍎 **macOS** | **[CannaScope CT Beta V11 - macOS.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.0.0-beta/CannaScope.CT.Beta.V11.-.macOS.zip)** | unzip → `chmod +x run.sh && ./run.sh statewide --days 90` |
-| 🐧 **Linux** | **[CannaScope CT Beta V11 - Linux.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.0.0-beta/CannaScope.CT.Beta.V11.-.Linux.zip)** | unzip → `chmod +x run.sh && ./run.sh statewide --days 90` |
+| 🪟 **Windows** | **[CannaScope CT Beta V11.1 - Windows.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.1.0-beta/CannaScope.CT.Beta.V11.1.-.Windows.zip)** | unzip → `run.bat statewide --days 90` |
+| 🍎 **macOS** | **[CannaScope CT Beta V11.1 - macOS.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.1.0-beta/CannaScope.CT.Beta.V11.1.-.macOS.zip)** | unzip → `chmod +x run.sh && ./run.sh statewide --days 90` |
+| 🐧 **Linux** | **[CannaScope CT Beta V11.1 - Linux.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v11.1.0-beta/CannaScope.CT.Beta.V11.1.-.Linux.zip)** | unzip → `chmod +x run.sh && ./run.sh statewide --days 90` |
 
 ➡️ **[See all downloads & release notes on the Releases page »](https://github.com/jmlschlee/CannaScope-CT/releases/latest)**
-&nbsp;•&nbsp; Prefer one file? Grab **[`CannaScope_CT_Beta_V11.py`](CannaScope_CT_Beta_V11.py)** and run `python3 CannaScope_CT_Beta_V11.py`.
+&nbsp;•&nbsp; The self-contained `CannaScope_CT_Beta_V11_1.py` (everything baked in) is inside each download zip above.
 
 ---
 
