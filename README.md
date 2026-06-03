@@ -1,12 +1,12 @@
 <div align="center">
 
-# 🌿 CannaScope CT V7.2
+# 🌿 CannaScope CT Beta V9.1
 
 ### Connecticut Cannabis Transparency Report
 **Source-verified consumer-awareness & testing-pattern review**
 
-[![Latest Release](https://img.shields.io/github/v/release/jmlschlee/CannaScope-CT-V7.2?label=latest%20release&color=2ea44f)](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/jmlschlee/CannaScope-CT-V7.2/total?color=blue)](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases)
+[![Latest Release](https://img.shields.io/github/v/release/jmlschlee/CannaScope-CT-Beta-V9.1?label=latest%20release&color=2ea44f)](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/jmlschlee/CannaScope-CT-Beta-V9.1/total?color=blue)](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases)
 [![License](https://img.shields.io/badge/license-see%20LICENSE-lightgrey)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.9%2B-3776ab)](https://www.python.org/)
 
@@ -16,10 +16,10 @@
 
 ---
 
-> ### 🆕 CannaScope CT **V9 Beta** — now available
+> ### 🆕 CannaScope CT **V9.1** — now available
 > New in V9: a **Compliance Screening** section (potential Connecticut statutory/regulatory flags to *investigate*, with cited authorities and clickable COA links) and a **CT Cannabis Ombudsman — Medical Patient Safety Review** section (products that *passed* testing but came closest to a CT action limit, ranked). Review aids — not legal or medical advice. V9 is the current release; V7.2 and all prior versions remain available below.
 >
-> **V9 Beta downloads:** [Windows](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/download/v9.0.0-beta/CannaScopeCT-v9.0.0-beta-windows.zip) · [macOS](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/download/v9.0.0-beta/CannaScopeCT-v9.0.0-beta-macos.zip) · [Linux](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/download/v9.0.0-beta/CannaScopeCT-v9.0.0-beta-linux.zip) · [release notes »](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/tag/v9.0.0-beta)
+> **V9 Beta downloads:** [Windows](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/download/v9.1.0-beta/CannaScopeCT-v9.1.0-beta-windows.zip) · [macOS](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/download/v9.1.0-beta/CannaScopeCT-v9.1.0-beta-macos.zip) · [Linux](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/download/v9.1.0-beta/CannaScopeCT-v9.1.0-beta-linux.zip) · [release notes »](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/tag/v9.1.0-beta)
 
 ---
 
@@ -30,11 +30,11 @@
 
 | Operating System | Download | How to launch |
 |---|---|---|
-| 🪟 **Windows** | **[CannaScope_CT_V7_2_Windows.zip](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/latest/download/CannaScope_CT_V7_2_Windows.zip)** | unzip → double-click `run.bat` |
-| 🍎 **macOS** | **[CannaScope_CT_V7_2_macOS.zip](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/latest/download/CannaScope_CT_V7_2_macOS.zip)** | unzip → right-click `run.command` → **Open** |
-| 🐧 **Linux** | **[CannaScope_CT_V7_2_Linux.zip](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/latest/download/CannaScope_CT_V7_2_Linux.zip)** | unzip → `chmod +x run.sh && ./run.sh` |
+| 🪟 **Windows** | **[CannaScope_CT_V7_2_Windows.zip](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/latest/download/CannaScope_CT_V7_2_Windows.zip)** | unzip → double-click `run.bat` |
+| 🍎 **macOS** | **[CannaScope_CT_V7_2_macOS.zip](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/latest/download/CannaScope_CT_V7_2_macOS.zip)** | unzip → right-click `run.command` → **Open** |
+| 🐧 **Linux** | **[CannaScope_CT_V7_2_Linux.zip](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/latest/download/CannaScope_CT_V7_2_Linux.zip)** | unzip → `chmod +x run.sh && ./run.sh` |
 
-➡️ **[See all downloads & release notes on the Releases page »](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases/latest)**
+➡️ **[See all downloads & release notes on the Releases page »](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases/latest)**
 &nbsp;•&nbsp; Prefer one file? Grab **[`CannaScope_CT_V7_2.py`](CannaScope_CT_V7_2.py)** and run `python3 CannaScope_CT_V7_2.py`.
 
 ---
@@ -94,11 +94,11 @@ Python 3.9+ and the packages in [`requirements.txt`](requirements.txt) (installe
 ## 💬 Feedback welcome — it directly improves the tool
 
 Spotted a mis-parse, a COA that didn't read, or have an idea?
-**[Open an issue »](https://github.com/jmlschlee/CannaScope-CT-V7.2/issues)** or start a **[discussion »](https://github.com/jmlschlee/CannaScope-CT-V7.2/discussions)**. Real-world COA examples and edge cases are especially valuable. ⭐ Star the repo if you find it useful.
+**[Open an issue »](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/issues)** or start a **[discussion »](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/discussions)**. Real-world COA examples and edge cases are especially valuable. ⭐ Star the repo if you find it useful.
 
 ## Version history
 
-Every prior version remains available — **nothing is removed.** See the **[Releases page](https://github.com/jmlschlee/CannaScope-CT-V7.2/releases)** for V6.1, V5, V4, V3, V2, and Beta V1 and their assets, and [`CHANGELOG.md`](CHANGELOG.md) for details.
+Every prior version remains available — **nothing is removed.** See the **[Releases page](https://github.com/jmlschlee/CannaScope-CT-Beta-V9.1/releases)** for V6.1, V5, V4, V3, V2, and Beta V1 and their assets, and [`CHANGELOG.md`](CHANGELOG.md) for details.
 
 ## ⚖️ Disclaimer
 

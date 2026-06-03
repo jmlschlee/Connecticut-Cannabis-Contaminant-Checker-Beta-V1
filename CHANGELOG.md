@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [9.1.0-beta] — CannaScope CT Beta V9.1 — current release
+
+Consolidation point release of the V9 line. Additive: all prior releases remain live and
+downloadable, unchanged. Repository renamed to `CannaScope-CT-Beta-V9.1` to match.
+
+### Changed
+- Version label bumped to **CannaScope CT Beta V9.1**; refreshed Windows/macOS/Linux
+  downloads under the V9.1 name.
+
+### Unchanged from V9.0
+- Compliance Screening + "Potential Statute & Regulatory Flags to Evaluate" PDF section.
+- CT Cannabis Ombudsman — Medical Patient Safety Review PDF section.
+- Field-aware COA extraction, ND/limit/LOQ/LOD never published as measurements,
+  regulatory-limit → manual review, crash-isolated OCR, offline mode.
+- No detection-logic changes.
+
+
 ## [9.0.0-beta] — CannaScope CT V9 Beta
 
 Additive release. All prior releases remain live and downloadable, unchanged. Released as the current version; all prior releases remain live and downloadable.
