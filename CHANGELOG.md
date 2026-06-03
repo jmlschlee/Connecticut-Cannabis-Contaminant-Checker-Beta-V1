@@ -2,7 +2,29 @@
 
 All notable changes to this project are documented here.
 
-## [11.0.0-beta] — 2026-06-03 — CannaScope CT V11 Beta — current release (beta)
+## [11.1.0-beta] — 2026-06-03 — CannaScope CT V11.1 Beta — current release (beta) — EMERGENCY COA INTEGRITY PATCH
+
+Use V11.1 instead of V11. Additive; all prior releases remain live and unchanged.
+
+### Fixed / hardened (data integrity)
+- Enforced COA source-binding in BOTH reports: every published value is independently re-verified
+  in its OWN linked COA; any value that cannot be confirmed is EXCLUDED and routed to manual
+  review. Nothing unverified is ever published.
+- New COA Source Mismatch Review queue; the consumer report shows a "held for manual review" note.
+- New status FAIL SOURCE VALIDATION (and PASS WITH WARNINGS when mismatches are found + excluded).
+
+### Added
+- Integrity exports: COA_Provenance_Audit.csv, COA_Source_Mismatch_Review.csv, Multiple_COA_Alert.csv;
+  a "COA Source-Binding Audit" diagnostics panel; new diagnostics metrics.
+- Baked-in caches: embedded registry snapshot (skips the download when fresh; offline/fallback;
+  online auto-refresh keeps data current) + opt-in --fast-cached first-run mode.
+
+### Unchanged
+- Thresholds, calculations, COA-verification standards, section order, Ombudsman placement, and
+  report numbering. The single-file build ships in the download zips (the registry snapshot it
+  embeds is intentionally NOT committed to the git tree to avoid repo bloat).
+
+## [11.0.0-beta] — 2026-06-03 — CannaScope CT V11 Beta — beta
 
 Additive release. All prior versions remain live and downloadable, unchanged.
 
