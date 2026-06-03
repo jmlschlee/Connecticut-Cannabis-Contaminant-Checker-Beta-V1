@@ -19,7 +19,7 @@
 > ### 🆕 CannaScope CT **Beta V10** — now available
 > **New in V10:** a **Patient-Reported Product Concern — Personalized Analysis** PDF — an on-demand, single-product report a patient can request. It resolves the product against the CT registry + its live COA from whatever identifiers they have, surfaces identifier discrepancies, and links related/sibling COAs from the same producer (closest in time) with live clickable COA links so they can compare batches. Advisory, non-diagnostic, **not medical advice.** V10 carries forward the **Potential Statute & Regulatory Flags to Evaluate** and **CT Cannabis Ombudsman — Medical Patient Safety Review** sections (with COA dates + clickable COA links). All prior versions remain available below.
 >
-> **V10 Beta downloads:** [Windows](https://github.com/jmlschlee/CannaScope-CT/releases/latest/download/CannaScope%20CT%20Beta%20V10%20-%20Windows.zip) · [macOS](https://github.com/jmlschlee/CannaScope-CT/releases/latest/download/CannaScope%20CT%20Beta%20V10%20-%20macOS.zip) · [Linux](https://github.com/jmlschlee/CannaScope-CT/releases/latest/download/CannaScope%20CT%20Beta%20V10%20-%20Linux.zip) · [release notes »](https://github.com/jmlschlee/CannaScope-CT/releases/tag/v10.0.0-beta)
+> **V10 Beta downloads:** [Windows](https://github.com/jmlschlee/CannaScope-CT/releases/download/v10.0.0-beta/CannaScope%20CT%20Beta%20V10%20-%20Windows.zip) · [macOS](https://github.com/jmlschlee/CannaScope-CT/releases/download/v10.0.0-beta/CannaScope%20CT%20Beta%20V10%20-%20macOS.zip) · [Linux](https://github.com/jmlschlee/CannaScope-CT/releases/download/v10.0.0-beta/CannaScope%20CT%20Beta%20V10%20-%20Linux.zip) · [release notes »](https://github.com/jmlschlee/CannaScope-CT/releases/tag/v10.0.0-beta)
 
 ---
 
@@ -30,9 +30,9 @@
 
 | Operating System | Download | How to launch |
 |---|---|---|
-| 🪟 **Windows** | **[CannaScope CT Beta V10 - Windows.zip](https://github.com/jmlschlee/CannaScope-CT/releases/latest/download/CannaScope%20CT%20Beta%20V10%20-%20Windows.zip)** | unzip → double-click `run.bat` |
-| 🍎 **macOS** | **[CannaScope CT Beta V10 - macOS.zip](https://github.com/jmlschlee/CannaScope-CT/releases/latest/download/CannaScope%20CT%20Beta%20V10%20-%20macOS.zip)** | unzip → `chmod +x run.sh && ./run.sh` |
-| 🐧 **Linux** | **[CannaScope CT Beta V10 - Linux.zip](https://github.com/jmlschlee/CannaScope-CT/releases/latest/download/CannaScope%20CT%20Beta%20V10%20-%20Linux.zip)** | unzip → `chmod +x run.sh && ./run.sh` |
+| 🪟 **Windows** | **[CannaScope CT Beta V10 - Windows.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v10.0.0-beta/CannaScope%20CT%20Beta%20V10%20-%20Windows.zip)** | unzip → double-click `run.bat` |
+| 🍎 **macOS** | **[CannaScope CT Beta V10 - macOS.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v10.0.0-beta/CannaScope%20CT%20Beta%20V10%20-%20macOS.zip)** | unzip → `chmod +x run.sh && ./run.sh` |
+| 🐧 **Linux** | **[CannaScope CT Beta V10 - Linux.zip](https://github.com/jmlschlee/CannaScope-CT/releases/download/v10.0.0-beta/CannaScope%20CT%20Beta%20V10%20-%20Linux.zip)** | unzip → `chmod +x run.sh && ./run.sh` |
 
 ➡️ **[See all downloads & release notes on the Releases page »](https://github.com/jmlschlee/CannaScope-CT/releases/latest)**
 &nbsp;•&nbsp; Prefer one file? Grab **[`CannaScope_CT_Beta_V10.py`](CannaScope_CT_Beta_V10.py)** and run `python3 CannaScope_CT_Beta_V10.py`.
