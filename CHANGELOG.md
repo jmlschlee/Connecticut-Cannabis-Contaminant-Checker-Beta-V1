@@ -2,7 +2,29 @@
 
 All notable changes to this project are documented here.
 
-## [10.0.0-beta] — 2026-06-03 — CannaScope CT Beta V10 — current release (beta)
+## [11.0.0-beta] — 2026-06-03 — CannaScope CT V11 Beta — current release (beta)
+
+Additive release. All prior versions remain live and downloadable, unchanged.
+
+### Added / improved
+- Clean two-report naming: **Statewide Transparency Report** (`statewide`, also the default) and
+  **Personalized Product Concern Report** (`concern`), each with its own output folder.
+- Statewide report: first-pages (1-3) layout polish + findings-first **Findings at a Glance**
+  summary, a consolidated producer section, and concise per-section trend notes. COA IDs never
+  wrap and stay clickable; full product names preserved.
+- Consumer report: **PRODUCT OF CONCERN** header, **Complaint Investigation Summary**,
+  **severity tiers**, legal-entity + brand producer names, **Producer Trend Context**, smarter
+  related/sibling-COA comparison (same product -> size -> closest date), and a
+  **"Why this product was matched"** explanation.
+- Self-contained `CannaScope_CT_Beta_V11.py` + modular `cannascope_ct_v11.py` + `_make_v11.py`.
+- Windows / macOS / Linux download bundles.
+
+### Unchanged
+- Statute/Ombudsman sections, COA dates + clickable links, multi-lab COA-parsing accuracy,
+  offline bundle, numbered never-overwrite reports. Thresholds, calculations, COA-verification,
+  and matching logic are unchanged.
+
+## [10.0.0-beta] — 2026-06-03 — CannaScope CT Beta V10 — beta
 
 Additive release. All prior versions remain live and downloadable, unchanged. Repository
 renamed to `CannaScope-CT` (stable name; GitHub redirect from the old name preserved — the
