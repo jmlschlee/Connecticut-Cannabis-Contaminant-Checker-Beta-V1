@@ -1,6 +1,6 @@
 # CannaScope CT — V9 Beta
 
-> **Pre-release for evaluation.** This is an *additive* release: every prior version below remains live and downloadable, unchanged. Stable **V7.2** is still the recommended general download.
+> This is an *additive* release: every prior version below remains live and downloadable, unchanged. V9 is the current release.
 
 ## What CannaScope CT is
 
@@ -39,6 +39,6 @@ Pre-built, self-contained bundles (each = the single-file program + an OS launch
 
 All prior releases remain available unchanged.
 
-## Beta notice
+## Important notice
 
-Pre-release for evaluation. The compliance and ombudsman outputs are **review aids, not legal or medical advice and not an adjudication**. Confirm every citation against eRegulations.ct.gov and have a qualified compliance officer or attorney validate flags before acting; verify every product against its official, live COA.
+The compliance and ombudsman outputs are **review aids, not legal or medical advice and not an adjudication**. Confirm every citation against eRegulations.ct.gov and have a qualified compliance officer or attorney validate flags before acting; verify every product against its official, live COA.
