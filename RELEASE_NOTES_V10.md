@@ -64,6 +64,6 @@ releases remain available, unchanged.
   repository — carries the version.
 
 ## Beta notice
-Pre-release for evaluation. Compliance and patient outputs are review aids, **not legal or
+Beta release for evaluation. Compliance and patient outputs are review aids, **not legal or
 medical advice**; confirm any cited authority against eRegulations.ct.gov and have a qualified
 compliance officer or attorney validate flags before acting.
