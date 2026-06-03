@@ -2,10 +2,9 @@
 
 All notable changes to this project are documented here.
 
-## [9.0.0-beta] — CannaScope CT V9 Beta — pre-release
+## [9.0.0-beta] — CannaScope CT V9 Beta
 
-Additive release. All prior releases remain live and downloadable, unchanged. Marked as a
-pre-release; stable V7.2 remains the recommended general download.
+Additive release. All prior releases remain live and downloadable, unchanged. Released as the current version; all prior releases remain live and downloadable.
 
 ### Added
 - **Compliance Screening Engine** — surfaces *potential* Connecticut statutory/regulatory
@@ -28,7 +27,7 @@ pre-release; stable V7.2 remains the recommended general download.
 - Carries the V8.x accuracy work: field-aware COA extraction across lab/year formats,
   ND/limit/LOQ/LOD never published as measurements, regulatory-limit matches routed to
   manual review.
-- Pre-release for evaluation; compliance and ombudsman outputs are review aids, not legal or
+- Compliance and ombudsman outputs are review aids, not legal or
   medical advice.
 
 
