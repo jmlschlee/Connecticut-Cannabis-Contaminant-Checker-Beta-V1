@@ -66,11 +66,11 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V15.1.1"
+APP_NAME = "CannaScope CT V15.1.2"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "15.1.1"
+SOFTWARE_VERSION = "15.1.2"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
 
 # ============================================================================
@@ -1856,6 +1856,11 @@ def standard_note(category, date, lab="", product_type=""):
 # ============================================================================
 LEGAL_CACHE = os.path.join(OUT_DIR, "Legal Standards Cache.json")
 LEGAL_CACHE_TTL = 30 * 24 * 3600          # re-verify monthly; a cache is a hint, not forever-truth
+# Stamp written into each cache entry. BUMP THIS whenever the live-fetch logic changes (source URLs,
+# timeout, TLS/cert handling) — a cached entry whose stamp != current is treated as a miss and
+# re-fetched, so a fetch fix is never masked by stale "unreachable" entries from an older build.
+# (v1 = original; v2 = V15.1.1 live-source fix: fixed DCP URL + 25s timeout + GoDaddy-G2 chain.)
+LEGAL_FETCH_VERSION = 2
 LEGAL_UNVERIFIED = "Historical standard not verified — manual legal review needed"
 # CT primary sources consulted as a FALLBACK (domains are real; exact deep links may move — a 404
 # still counts as a logged, honest attempt and falls back to "unverified", never a crash/fabrication).
@@ -2017,7 +2022,8 @@ def verify_standard(category, date, lab="", product_type="", online=True, sessio
     cache = _legal_cache_load()
     key = f"{rec['category']}:{rec['era']}"
     ce = cache.get(key)
-    if ce and (time.time() - ce.get("fetched_epoch", 0) < LEGAL_CACHE_TTL):
+    if (ce and ce.get("fetch_version") == LEGAL_FETCH_VERSION
+            and (time.time() - ce.get("fetched_epoch", 0) < LEGAL_CACHE_TTL)):
         rec.update(verified=ce.get("verified", False), sources_attempted=ce.get("sources_attempted", []),
                    fetched_at=ce.get("fetched_at", ""), status=(ce.get("status", "") or "from cache"))
         if not rec["verified"]:
@@ -2040,7 +2046,8 @@ def verify_standard(category, date, lab="", product_type="", online=True, sessio
                        else "live CT sources unreachable this run"))
     rec["note"] = (rec["note"] + " " if rec["note"] else "") + LEGAL_UNVERIFIED
     cache[key] = dict(verified=False, sources_attempted=attempted, fetched_at=stamp,
-                      fetched_epoch=time.time(), status=rec["status"])
+                      fetched_epoch=time.time(), status=rec["status"],
+                      fetch_version=LEGAL_FETCH_VERSION)
     _legal_cache_save(cache)
     return rec
 

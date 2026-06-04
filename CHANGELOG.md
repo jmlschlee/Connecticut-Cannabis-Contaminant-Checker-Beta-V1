@@ -2,7 +2,25 @@
 
 All notable changes to this project are documented here.
 
-## [15.1.1] — 2026-06-04 — CannaScope CT V15.1.1 — current release
+## [15.1.2] — 2026-06-04 — CannaScope CT V15.1.2 — current release
+
+Additive patch on top of V15.1.1. All prior releases remain live and unchanged; nothing was removed
+from the repository. This release makes the V15.1.1 live-source fix take effect even when an older
+build had already cached "unreachable" results.
+
+### Fixed
+- **Stale legal-source cache no longer masks the live-source fix.** The `Legal Standards Cache.json`
+  entries are now stamped with a fetch-logic version (`LEGAL_FETCH_VERSION`). A cached entry whose
+  stamp does not match the current version is treated as a miss and re-fetched. Because the V15.1.1
+  fetch fix (corrected DCP URL, longer timeout, completed TLS chain) is a new fetch-logic version,
+  any "live CT sources unreachable" entry written by a pre-fix build within the 30-day cache window
+  is now ignored and re-verified live, instead of being shown again. No manual cache deletion needed.
+
+### Unchanged / preserved
+- Every V15.1.1 and V15.1.0 feature is unchanged. No files, branches, tags, or releases were deleted
+  or renamed. The 30-day re-verification window and the fail-safe, never-fabricate behavior are intact.
+
+## [15.1.1] — 2026-06-04 — CannaScope CT V15.1.1
 
 Additive patch on top of V15.1.0. All prior releases remain live and unchanged; nothing was removed
 from the repository. This release restores the program's ability to reach the live Connecticut

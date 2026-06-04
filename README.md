@@ -1,4 +1,4 @@
-# 🌿 CannaScope CT V15.1.1 — Source-Verified Cannabis Transparency Reports
+# 🌿 CannaScope CT V15.1.2 — Source-Verified Cannabis Transparency Reports
 
 **CannaScope CT** is a consumer-awareness research tool for Connecticut's legal cannabis market.
 It reads the state's public product registry and the Certificates of Analysis (COAs) those products
