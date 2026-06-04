@@ -2,7 +2,60 @@
 
 All notable changes to this project are documented here.
 
-## [14.0.0] — 2026-06-04 — CannaScope CT V14 — current release
+## [15.0.0] — 2026-06-04 — CannaScope CT V15 — current release
+
+A truth-in-reporting release: the report says only what the COAs and the date-correct standards
+support, labels its own limits plainly, and packages cleanly. All prior releases remain live and
+unchanged; nothing removed from the repository.
+
+### Added
+- **Three-part potency review** — High THC Flower (A), Impossible Cannabinoid Math (B), Possible
+  Product-Type Misclassification (C) — replacing the combined high-cannabinoid section. Total THC is
+  computed from the COA's own components (`0.877 × THCA + Δ9-THC`).
+- **Six-field COA triple-check** on every published row (value · product · date · lab · unit ·
+  analyte) with an auditable per-row stamp (`COA_Provenance_Audit.csv`); clear mismatches route to a
+  new **Coverage Gaps / Unvalidated COAs** section.
+- **Legal Standard Verification (by test date)** — local-first (built-in date-keyed registry → cached
+  prior lookup), consulting live CT sources (eRegulations / CGS / DCP) **only as a fallback**, fully
+  fail-safe and never fabricated; unconfirmed standards say "Historical standard not verified —
+  manual legal review needed" with the URLs attempted. Cached in `Legal Standards Cache.json`.
+- **Software Self-Enhancement & Self-Audit** section + a persistent cross-run **improvement log**
+  (`Self-Improvement Log.json`) the next run reads and re-attempts.
+- **Short PDF filenames + per-run output folders + persistent numbering registry** —
+  `{N}-CannaScopeCT-{SW|CC}-{M.D.YY}-{TIME}.pdf`; each run gets its own
+  `{N} Statewide Report {M.D.YY}` / `{N} Consumer Concern Report {M.D.YY}` folder holding the PDF +
+  all CSVs/diagnostics; `report_registry.json` keeps global report numbers and per-type folder
+  numbers; nothing is ever overwritten or reused.
+- **Applicable CT Standards by Test Date** reference table; testing dates on **every** Ombudsman and
+  Compliance Review Leads row.
+
+### Changed / fixed
+- **Conflict math** recomputed + consistency-gated (absolute difference, ratio = max ÷ min, %
+  difference); near-equal values no longer show huge multipliers; implausible ratios are labeled
+  likely parser/format artifacts.
+- **Conflict wording** corrected — same-lab retests labeled as retests/duplicates; "possible
+  lab-shopping indicator" reserved for genuine cross-lab pass/fail conflicts; no failed-result
+  language in PASS/PASS cases.
+- **Yeast & Mold review** renamed "Yeast & Mold — Date & Lab Standard Review" and narrowed to real
+  standard/reporting/pathogen concerns.
+- **PDF layout** — larger fonts, adaptive landscape table widths, no detached headers, cleaner page
+  breaks, larger footers.
+- Confidence/uncertainty appendix metrics relabeled to mutually-distinct names with an explainer.
+- Year-by-year COA Format Learning now auto-prioritizes the least-trained years.
+
+### Removed (V15 report sections/behaviors — repository history preserved)
+- **Lower-Concern Products** section (risked reading as a safety ranking / endorsement).
+- The internal **10,000 CFU/g benchmark as a standalone concern — from the Yeast & Mold Standard
+  Review only** (still an internal awareness threshold shown elsewhere).
+- Misleading same-lab/cross-lab wording; failed-result language in PASS/PASS cases; unvalidated /
+  unreadable COAs from normal findings; and overly long PDF filenames.
+
+### Known limitations
+- Historical non-TYM limits ship marked **UNVERIFIED** pending manual confirmation; live legal
+  lookups reach + log the sources but do not auto-extract an exact dated number from legal prose.
+- 2023–2024 COA formats still being trained (surfaced in the Self-Audit; run `learn` online to mature).
+
+## [14.0.0] — 2026-06-04 — CannaScope CT V14
 
 Carries everything in V13 and adds historical COA-format awareness, a clean permanent report-naming
 standard, and layout polish. All prior releases remain live and unchanged; nothing removed.
