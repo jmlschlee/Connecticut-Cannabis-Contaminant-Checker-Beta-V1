@@ -2,7 +2,41 @@
 
 All notable changes to this project are documented here.
 
-## [11.1.0-beta] — 2026-06-03 — CannaScope CT V11.1 Beta — current release (beta) — EMERGENCY COA INTEGRITY PATCH
+## [12.1.0-beta] — 2026-06-03 — CannaScope CT Beta V12.1 — current release (beta)
+
+Additive feature release. Carries every V11.1 integrity feature and all prior capabilities; all
+prior releases remain live and unchanged. Nothing removed.
+
+### Added — Conflicting COA Results & Possible Lab-Shopping Indicators (Statewide Transparency Report)
+- A new statewide section that surfaces **document-level discrepancies for human review,
+  neutrally** — no allegations of fraud or misconduct.
+- **Cross-record detection:** the same physical lot (matched on a distinctive shared identifier —
+  batch, lot, BioTrack/UID, lab sample ID, or product code) showing **conflicting pass/fail COA
+  results** across lab reports, especially an **earlier failing result followed by a later passing
+  result** on a regulated safety category (a *possible retesting discrepancy / possible
+  lab-shopping indicator*).
+- **Within-document detection:** one COA carrying more than one lab identity, or a passing summary
+  alongside a failing regulated-test result (page numbers preserved where available). Uses a strict
+  fail-verdict match that ignores "Pass/Fail" column headers (no false positives on clean COAs).
+- Categories compared: total yeast & mold, total aerobic microbial count, Aspergillus, E. coli,
+  Shiga toxin-producing E. coli, Salmonella, Listeria, mycotoxins, heavy metals, pesticide panel.
+- Presentation: high-severity examples ride near the top of the report (red = Critical, orange =
+  High); otherwise lower-severity observations appear later, and if none are found the report notes
+  "No conflicting COA result patterns detected." Each case shows a side-by-side comparison, the
+  numeric difference, a timeline note, source COA links/page references, and a plain-English
+  explanation that names the innocent explanations too. Severity tiers Critical/High/Medium/Low.
+- New export `conflicting_coa_results.csv`; an executive-summary line when Critical cases exist; and
+  a validation note: "This section flags document-level discrepancies only. It does not prove
+  intent, misconduct, remediation, or unlawful conduct without further verification."
+- Statewide report only. The Personalized Product Concern report is unchanged unless the specific
+  product is itself involved.
+
+### Unchanged
+- Thresholds, calculations, COA-verification standards, the rest of the section order, Ombudsman and
+  TYM placement, and report numbering. The single-file build ships in the download zips (the
+  registry snapshot it embeds is intentionally NOT committed to the git tree to avoid repo bloat).
+
+## [11.1.0-beta] — 2026-06-03 — CannaScope CT V11.1 Beta — EMERGENCY COA INTEGRITY PATCH
 
 Use V11.1 instead of V11. Additive; all prior releases remain live and unchanged.
 
