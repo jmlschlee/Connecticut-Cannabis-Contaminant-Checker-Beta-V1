@@ -2,7 +2,48 @@
 
 All notable changes to this project are documented here.
 
-## [12.1.0-beta] — 2026-06-03 — CannaScope CT Beta V12.1 — current release (beta)
+## [13.0.0] — 2026-06-03 — CannaScope CT V13 — current release
+
+Big readability + integrity + feature release. Carries all V11/V12 capabilities; all prior releases
+remain live and unchanged. Nothing removed from the repository.
+
+### Added
+- **Conflicting COA Results & Possible Lab-Shopping Indicators** (statewide): same physical lot
+  (shared batch/lot/BioTrack/sample/product-code) with conflicting pass/fail across lab reports,
+  esp. an earlier FAIL followed by a later PASS. Pass/fail is judged against the limit STATED ON
+  EACH COA (CT standards changed over the years). Neutral, human-review-only; never alleges
+  misconduct. New `conflicting_coa_results.csv` export.
+- **High-cannabinoid breakdown** columns: THCA / Δ9-THC / CBD / Total THC / Total Cannabinoids.
+- **Potential Compliance Review Leads** (renamed from Statute & Regulatory Flags) with buckets
+  A (over current CT limit) / B (implausible potency + cannabinoid breakdown + chemistry consistency
+  checks) / C (missing numeric microbial despite PASS) / D (COA/document inconsistency); cautious
+  "authority area to verify in eRegulations" wording.
+- **Most Important Findings** summary box (computed) + **How To Read These Findings** legend.
+- **Dataset accounting** line (window / scanned this run / reused from ledger / fetched / published).
+
+### Changed / fixed
+- **Producer percentages** now use each producer's total products in the window as the denominator
+  (was a misleading near-100%); section renamed "Flagged Findings by Producer."
+- **Report numbering** carried in filename + cover + footer + PDF metadata, with a guard against
+  overwrite/reuse; each report is **one uniquely numbered file** (removed a duplicate-copy that
+  caused OS "overwrite" prompts); second-precision timestamps.
+- **Section reorder** to a publication-first flow; technical material moved to an **Appendix**.
+- Fixed a box-overlap rendering bug (shaded boxes no longer bleed over headers); centered the
+  Most Important Findings header; fixed a legend block that was pushed to a new page.
+- Remediation now flags flower at/under 100 CFU/g; Lower-Concern range 800–3,000 CFU/g.
+- Rebranded from "CannaScope CT Beta V12.1" to **"CannaScope CT V13"** (dropped "Beta").
+
+### Removed
+- The two potency-reference sections (infused products; vapes/concentrates/extracts) — pure potency
+  listings, not findings.
+- Five redundant "Top …" mini summary tables (duplicated the full sections + the summary boxes).
+
+### Unchanged
+- The COA source-binding integrity rule, thresholds/calculations, and the detection engine. The
+  single-file build ships in the download zips (the embedded registry snapshot is intentionally NOT
+  committed to git to avoid repo bloat).
+
+## [12.1.0-beta] — 2026-06-03 — CannaScope CT Beta V12.1
 
 Additive feature release. Carries every V11.1 integrity feature and all prior capabilities; all
 prior releases remain live and unchanged. Nothing removed.
