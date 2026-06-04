@@ -25,9 +25,10 @@ SCRIPT = next((c for c in _CANDIDATES if os.path.exists(os.path.join(HERE, c))),
 
 STATEWIDE_DIR = "CannaScope CT V15 - Statewide Transparency Reports"
 CONSUMER_DIR = os.path.join("output", "consumer_concerns")
-# Hard caps so a click is always LIGHT (a public click never triggers a full statewide scan).
-STATEWIDE_MAX_LIMIT = 40
-RUN_TIMEOUT = 240  # seconds; a slow/hung generation fails friendly, never blocks forever
+# Caps keep a click bounded (a public click never triggers a full multi-thousand statewide scan).
+# Raised to a larger sample; the FULL uncapped report is the desktop download.
+STATEWIDE_MAX_LIMIT = 150
+RUN_TIMEOUT = 600  # seconds; a slow/hung generation fails friendly, never blocks forever
 
 
 def _newest_pdf(base, since):
@@ -110,8 +111,10 @@ else:
     st.subheader("Statewide transparency report (recent sample)")
     st.write("Generates a **small, recent sample** statewide report so it stays fast for everyone. "
              "For a full multi-year report, run the program from the desktop download.")
-    days = st.slider("How many recent days to sample", 7, 60, 21)
+    days = st.slider("How many recent days to sample", 7, 365, 30)
     limit = st.slider("Max products to review (sample cap)", 5, STATEWIDE_MAX_LIMIT, 25)
+    st.caption("Larger windows / higher product counts take longer and, near the top end, may time "
+               "out on the free hosting tier. For a full, uncapped statewide report, use the desktop download.")
     if st.button("Generate statewide sample", type="primary"):
         args = ["statewide", "--days", str(days), "--limit", str(int(limit))]
         with st.spinner(f"Reviewing up to {int(limit)} recent products…"):
