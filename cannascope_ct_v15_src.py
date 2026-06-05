@@ -74,11 +74,11 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V16.0.0"
+APP_NAME = "CannaScope CT V16.0.1"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "16.0.0"
+SOFTWARE_VERSION = "16.0.1"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
 
 # ============================================================================
@@ -1758,13 +1758,15 @@ def compliance_flag_rows(pub, watch):
             totc = thc_value(p, "total_cannabinoids")
             if totc is None:
                 totc = thc_value(p, "total_active")
+            # Compare Total Cannabinoids ONLY against decarboxylated Total THC — both are on the
+            # same (decarbed) basis. Do NOT compare against THCA: THCA is the acid form (~14% heavier
+            # than its decarbed equivalent), so a normal COA legitimately has Total Cannabinoids
+            # (decarbed sum) BELOW raw THCA — e.g. THCA 39.3% with Total Cannabinoids 36.1% is fully
+            # self-consistent (0.877*39.3 + small minors). Flagging that was a false positive.
             if totc is not None and total is not None and totc + 0.5 < total:
                 lp.append(f"reported Total Cannabinoids ({totc:g}%) is LOWER than reported Total THC "
-                          f"({total:g}%) — not chemically possible (Total Cannabinoids includes THC); "
+                          f"({total:g}%) — not chemically possible (Total Cannabinoids includes Total THC); "
                           f"possible reporting/transcription issue")
-            if totc is not None and thca is not None and totc + 0.5 < thca:
-                lp.append(f"reported Total Cannabinoids ({totc:g}%) is LOWER than reported THCA "
-                          f"({thca:g}%) — not chemically possible; possible reporting/transcription issue")
             if lp:
                 rows.append(dict(
                     p=p, rule_category="Labeling & potency accuracy",
@@ -3391,7 +3393,10 @@ def build_pdf(out_path, report_no, ctx):
                 narr = Paragraph(c["note"] + " This requires human review; it does not establish misconduct "
                                  "or any explanation.", body_st)
                 src = Paragraph("<b>Source COA:</b> " + (coa(p0) if p0.report_url else "not provided"), cell)
-                return KeepTogether([Spacer(1, 4), head, ident_line, Spacer(1, 2), detail, narr, src, Spacer(1, 8)])
+                # Keep only the heading + identifier + detail glued; let narrative/src flow so cases
+                # pack several-per-page instead of one-per-page (avoids huge per-case whitespace).
+                return [Spacer(1, 4), KeepTogether([head, ident_line, Spacer(1, 2), detail]),
+                        narr, src, Spacer(1, 8)]
 
             def rescell(m):
                 v = clean_value(m.get("value"), m.get("unit", "")) if m.get("value") is not None else "—"
@@ -3460,19 +3465,23 @@ def build_pdf(out_path, report_no, ctx):
                 # No safety conflict (e.g. multiple lab reports on one lot with no pass/fail clash).
                 narr = ("The same lot identifier appears on more than one report with no pass/fail safety conflict "
                         "detected. Listed for completeness and human review only.")
-            block = [Spacer(1, 4), head, ident_line, Spacer(1, 2), comp]
+            # Keep ONLY [head + identifier + comparison table] glued together so the table never
+            # orphans from its heading; let the difference/timeline/narrative flow afterward. This
+            # lets multiple cases share a page instead of reserving a full page each (the old
+            # KeepTogether(whole-block) left ~60% of every page blank across ~75 cases).
+            flow = [Spacer(1, 4), KeepTogether([head, ident_line, Spacer(1, 2), comp])]
             if extra:
-                block.append(Paragraph("&nbsp;&nbsp;".join(extra), TREND))
-            block.append(Paragraph(narr, body_st))
-            block.append(Spacer(1, 8))
-            return KeepTogether(block)
+                flow.append(Paragraph("&nbsp;&nbsp;".join(extra), TREND))
+            flow.append(Paragraph(narr, body_st))
+            flow.append(Spacer(1, 8))
+            return flow
 
         # EVERY case — regardless of severity — renders as a full per-case block so each one is
         # actually usable: test dates, the numeric difference, a timeline, and LIVE clickable COA
         # links for both records. (A bare summary table with no dates/links is not actionable.)
         CASE_CAP = 60
         for i, c in enumerate(items[:CASE_CAP], 1):
-            story.append(case_block(i, c))
+            story.extend(case_block(i, c))
         if len(items) > CASE_CAP:
             story.append(Paragraph(f"Showing the {CASE_CAP} highest-severity of {len(items)} review leads above; "
                                    "the complete list, with dates and COA links, is in "

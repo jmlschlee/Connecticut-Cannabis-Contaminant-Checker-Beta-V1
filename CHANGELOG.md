@@ -2,7 +2,34 @@
 
 All notable changes to this project are documented here.
 
-## [16.0.0] — 2026-06-05 — CannaScope CT V16 — current release
+## [16.0.1] — 2026-06-05 — CannaScope CT V16.0.1 — current release
+
+Critical report-accuracy patch. Fixes a single `parse_date` bug (ISO `YYYY-MM-DD` test dates were
+unreadable) that cascaded into the dated-standard lookup, legal-era keying, year extraction, and
+conflict dating — making every yeast & mold standard render as "unknown (no dated standard) —
+unclear/unverified." No detection threshold changed; no real finding added or lost (640 published,
+unchanged). `ANALYSIS_VERSION` stays 15.1.0. All prior releases remain live.
+
+### Fixed
+- **`parse_date` now parses ISO `YYYY-MM-DD` / `YYYY/MM/DD`** (plus US `MM/DD/YYYY` with optional
+  trailing time). Root cause: COA test dates are stored ISO, but the parser only understood US format,
+  so every dated lookup silently got "no date." Now 2025/2026 yeast & mold tests correctly apply the
+  100,000 CFU/g standard (real Lab/Now/Strict verdicts), and the live legal-source verification keys to
+  the correct era (eRegulations/CGS/DCP reached as the local-first fallback).
+- **Removed invalid cannabinoid check** comparing decarboxylated Total Cannabinoids against acid-form
+  THCA (~14% heavier) — it falsely flagged self-consistent COAs as "not chemically possible." The valid
+  Total-Cannabinoids-below-Total-THC check is kept.
+
+### Changed
+- **Conflicting-COA / lab-shopping section packs several cases per page** instead of one-per-page
+  (eliminates ~60%-blank pages; the 365-day report drops from 115 to 81 pages). Version → **16.0.1**.
+
+### Unchanged / preserved
+Detection thresholds, the triple-verified COA dataset, COA source-binding, three-part potency review,
+conflicting-COA detection logic, per-run folders, global report numbering. No files/branches/tags/
+releases deleted or renamed.
+
+## [16.0.0] — 2026-06-05 — CannaScope CT V16 
 
 The data-integrity release: a persistent **triple-verified COA measurement dataset** (≈33,692 COAs,
 2015–2026) baked into the program, plus six engine parser-accuracy fixes audited against the real

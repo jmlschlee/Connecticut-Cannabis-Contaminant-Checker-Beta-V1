@@ -382,11 +382,23 @@ def load_registry(session: requests.Session, refresh: bool = False) -> list:
 
 
 def parse_date(s: str):
-    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", s)
-    if not m:
+    """Parse a date string to a (year, month, day) tuple, or (0,0,0) if unrecognized.
+    Accepts US ``MM/DD/YYYY`` (optionally with a trailing time), ISO ``YYYY-MM-DD`` and
+    ``YYYY/MM/DD``. COA test dates arrive ISO while the registry uses US format, so both
+    must parse — every dated-standard / legal-era / window lookup depends on this."""
+    if not s:
         return (0, 0, 0)
-    mo, da, yr = map(int, m.groups())
-    return (yr, mo, da)
+    # US: MM/DD/YYYY (e.g. "07/02/2025" or "07/02/2025 12:00:00 AM")
+    m = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b", s)
+    if m:
+        mo, da, yr = map(int, m.groups())
+        return (yr, mo, da)
+    # ISO: YYYY-MM-DD or YYYY/MM/DD (e.g. "2025-07-02", "2025/07/02")
+    m = re.search(r"\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b", s)
+    if m:
+        yr, mo, da = map(int, m.groups())
+        return (yr, mo, da)
+    return (0, 0, 0)
 
 
 def _matches(form: str, keywords) -> bool:
