@@ -2,7 +2,41 @@
 
 All notable changes to this project are documented here.
 
-## [16.0.2] — 2026-06-05 — CannaScope CT V16.0.2 — current release
+## [16.1.0] — 2026-06-05 — CannaScope CT V16.1.0 — current release
+
+Bakes the per-year CT regulatory standard for every year (2015–2026) into the program with
+authoritative citations, COA corroboration, and a confirmation date; fixes character-level rendering
+garble; and makes the version string single-source. `ANALYSIS_VERSION` stays 15.1.0; published
+findings unchanged. All prior releases remain live.
+
+### Added
+- **CT Regulatory Standards — Year by Year (2015–2026)** section: per-year applied limit for yeast &
+  mold / aerobic / pathogens / heavy metals / THC, each cited to RCSA §21a-408-58 / CGS Ch. 420h / DCP
+  Policies & Procedures (with URL), corroborated by the action limit printed on the COAs in the
+  dataset (count shown), confirmed as of a stated date, and re-consulted live each run.
+- `CT_REG_CITATIONS`, `CT_REG_AS_OF`, and `reg_corroboration()` (counts dataset COAs printing each
+  applied limit). Live-first: where CT has no single number (heavy metals vary by product type) the
+  report defers to each COA's own printed limit.
+- **`fetch-standards` subcommand + embedded source-document ledger** — downloads each cited CT source
+  (incl. the §21a-408-58 regulation PDF), extracts text via the pdfium→pdfplumber→OCR pipeline,
+  SHA-256-hashes the raw bytes, and stores them in `CT Regulatory Ledger.json` (embedded + auto-seeded)
+  for offline forensic provenance. New "Cached source-document provenance" table renders URL, size,
+  method, text length, and content hash per source.
+
+### Fixed
+- **P0 rendering**: disabled ReportLab character-level word-splitting on the base cell + header styles
+  — integers no longer split across lines (`10`→`1`/`0`) and headers no longer garble
+  (`Confidence`→`Confidenc`/`e`).
+- **P4 version drift**: every rendered/printed disclaimer and recommended command now derives from one
+  version constant (`SCRIPT_FILE` / `PRODUCT_NAME`); the report no longer names the stale V15 script.
+  Version → 16.1.0.
+
+### Unchanged / preserved
+Detection thresholds, triple-verified COA dataset, source-binding, three-part potency review,
+conflicting-COA logic, per-run folders, global report numbering. No files/branches/tags/releases
+deleted or renamed.
+
+## [16.0.2] — 2026-06-05 — CannaScope CT V16.0.2 
 
 Standards-verification fix. After V16.0.1 made dated standards resolve, V16.0.2 makes them actually
 VERIFIED instead of a wall of red "UNVERIFIED": the established CT limits are confirmed against

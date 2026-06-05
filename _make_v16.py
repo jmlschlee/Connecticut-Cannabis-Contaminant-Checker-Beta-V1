@@ -34,6 +34,11 @@ print(f"  embedded skip-list: {(os.path.getsize(SKIP_PATH) if os.path.exists(SKI
 COA_CACHE_PATH = os.path.join(_RD, 'COA Data Cache.csv')
 COA_CACHE = bin_blob(COA_CACHE_PATH) if os.path.exists(COA_CACHE_PATH) else ''
 print(f"  embedded COA cache: {(os.path.getsize(COA_CACHE_PATH) if os.path.exists(COA_CACHE_PATH) else 0):,}B raw -> {len(COA_CACHE):,}B b64")
+# CT regulatory SOURCE-DOCUMENT ledger (built by `fetch-standards`). Embedded so the program ships
+# WITH the cached source text + SHA-256 hashes behind every dated limit (offline forensic provenance).
+REG_LEDGER_PATH = os.path.join(_RD, 'CT Regulatory Ledger.json')
+REG_LEDGER = bin_blob(REG_LEDGER_PATH) if os.path.exists(REG_LEDGER_PATH) else ''
+print(f"  embedded reg ledger: {(os.path.getsize(REG_LEDGER_PATH) if os.path.exists(REG_LEDGER_PATH) else 0):,}B raw -> {len(REG_LEDGER):,}B b64")
 
 v9 = open('cannascope_ct_v15_src.py', encoding='utf-8').read()
 body = v9[v9.index('import argparse'):]
@@ -80,6 +85,7 @@ _EMBEDDED_REGISTRY_B64 = %(REG)r
 _EMBEDDED_REGISTRY_EPOCH = %(REG_EPOCH)d
 _EMBEDDED_SKIPLIST_B64 = %(SKIP)r
 _EMBEDDED_COA_CACHE_B64 = %(COA_CACHE)r
+_EMBEDDED_REG_LEDGER_B64 = %(REG_LEDGER)r
 def _install_embedded():
     base=_os.getcwd()
     for name in ("ct_cannabis_names","cannascope_ct_v4","cannascope_ct_v5","coa_csv_cache"):
@@ -95,7 +101,7 @@ def _materialize_ocr_worker():
     except Exception: return ""
 _install_embedded()
 # ============================================================================
-''' % dict(NAMES=NAMES, V4=V4, V5=V5, CC=CC, WORKER=WORKER, REG=REG, REG_EPOCH=REG_EPOCH, SKIP=SKIP, COA_CACHE=COA_CACHE)
+''' % dict(NAMES=NAMES, V4=V4, V5=V5, CC=CC, WORKER=WORKER, REG=REG, REG_EPOCH=REG_EPOCH, SKIP=SKIP, COA_CACHE=COA_CACHE, REG_LEDGER=REG_LEDGER)
 out = HEADER + body
 open('CannaScope_CT_V16.py', 'w', encoding='utf-8').write(out)
 print(f'Wrote CannaScope_CT_V16.py ({len(out):,} bytes)')
