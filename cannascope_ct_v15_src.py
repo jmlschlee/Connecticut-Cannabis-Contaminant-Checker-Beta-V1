@@ -74,12 +74,17 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V16.0.2"
+APP_NAME = "CannaScope CT V16.1.0"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "16.0.2"
+SOFTWARE_VERSION = "16.1.0"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
+# Single source of truth for the actual shipped single-file name (major version only), used in EVERY
+# rendered/printed recommendation and disclaimer so the report never names a stale script (P4 fix).
+SCRIPT_FILE = f"CannaScope_CT_V{SOFTWARE_VERSION.split('.')[0]}.py"   # -> "CannaScope_CT_V16.py"
+# Short product name (no patch number) for disclaimers/prose.
+PRODUCT_NAME = "CannaScope CT V" + SOFTWARE_VERSION.split(".")[0]      # -> "CannaScope CT V16"
 
 # ============================================================================
 # SESSION HANDOFF / PROJECT STATE  (read this first in a fresh session)
@@ -268,7 +273,7 @@ memory/cannascope-project.md (and MEMORY.md index).
 
 REPORT_TITLE = "Connecticut Cannabis Statewide Transparency Report"
 REPORT_SUBTITLE = "Source-Verified Consumer Awareness & Testing Pattern Review"
-FRAMING = ("Every flag is a lead, not a conclusion. CannaScope CT V15 does not claim "
+FRAMING = ("Every flag is a lead, not a conclusion. " + PRODUCT_NAME + " does not claim "
            "fraud, unsafe product, or legal failure unless the live COA and the "
            "applicable Connecticut legal limit directly support that claim. Every published "
            "value is traced back to the actual result field on the source COA; anything that "
@@ -1028,6 +1033,12 @@ def validation_summary(debug, remaining, zero_checks, src_metrics, unverified_in
                      "historical-format parser review): " + ", ".join(gaps) + ".")
     if uncertain_published:
         fails.append(f"{uncertain_published} published finding(s) came from COA extractions rated UNCERTAIN.")
+    # P1: a violated count invariant (flagged <= parsed <= reported-on <= window) is a counting bug,
+    # not a clean result — FAIL the build rather than print an impossible fraction as "OK".
+    bad_inv = [c["category"] for c in zero_checks if not c.get("invariant_ok", True)]
+    if bad_inv:
+        fails.append("Count invariant violated (flagged ≤ parsed ≤ reported-on ≤ window) for: "
+                     + ", ".join(bad_inv) + " — a counting bug; not published as OK.")
     for i in remaining:
         msg = (i.get("issue") or "")
         if "parsed 0" in msg.lower() or "historical parser gap" in msg.lower():
@@ -1042,6 +1053,17 @@ def validation_summary(debug, remaining, zero_checks, src_metrics, unverified_in
     if absent:
         warns.append("Not reported on these historical COAs (labeled as a historical absence, not a clean "
                      "zero): " + ", ".join(absent) + ".")
+    # P3: a SAFETY-CRITICAL panel with ZERO reporting coverage is not a benign absence — it caps how
+    # reassuring any status can be, and must be surfaced prominently (not buried).
+    _SAFETY_PANELS = {"Pathogens", "Mercury"}
+    safety_zero = sorted({c["category"] for c in zero_checks
+                          if c["category"] in _SAFETY_PANELS and c.get("present", 0) == 0
+                          and c.get("flagged", 0) == 0})
+    if safety_zero:
+        warns.append("COVERAGE LIMITATION (safety-critical) — these panels have ZERO reporting coverage in "
+                     "this window: " + ", ".join(safety_zero) + ". This report CANNOT provide assurance on "
+                     "them; treat the absence of findings as 'not tested / not seen', not 'clean'. Status "
+                     "reflects only the panels that were actually reported.")
     if src_metrics.get("coa_source_mismatch_count"):
         warns.append(f"{src_metrics['coa_source_mismatch_count']} value(s) excluded to the COA Source "
                      "Mismatch review queue (not published).")
@@ -2055,11 +2077,70 @@ LEGAL_UNVERIFIED = "Historical standard not verified — manual legal review nee
 # still counts as a logged, honest attempt and falls back to "unverified", never a crash/fabrication).
 LEGAL_SOURCES = {
     "_general": [
-        ("CT eRegulations (DCP cannabis testing)", "https://eregulations.ct.gov/eRegsPortal/Search/home"),
-        ("CT General Statutes (cga.ct.gov)", "https://www.cga.ct.gov/current/pub/chap_420h.htm"),
-        ("CT DCP cannabis program", "https://portal.ct.gov/cannabis/medical-marijuana-program"),
+        ("CT eRegulations — RCSA §21a-408-58 (laboratory testing)",
+         "https://eregulations.ct.gov/eRegsPortal/Browse/RCSA/Title_21aSubtitle_21a-408Section_21a-408-58/"),
+        ("CT General Statutes — Chapter 420h (adult-use cannabis)", "https://www.cga.ct.gov/current/pub/chap_420h.htm"),
+        ("CT DCP — Policies & Procedures for the Cannabis Program",
+         "https://portal.ct.gov/cannabis/knowledge-base/articles/policies-and-procedures"),
     ],
 }
+
+# ── Year-by-year CT regulatory ledger (the "bake in every year's standard" requirement) ───────────
+# Each applied limit carries an AUTHORITATIVE CITATION so the report never shows a bare number. The
+# numeric values are confirmed against (1) the cited CT statute/regulation/DCP policy and (2) the
+# action limit actually PRINTED ON the CT COAs in this dataset — that COA corroboration count is
+# computed at runtime (see reg_corroboration). Heavy metals deliberately have NO single number (they
+# differ by product type), so the report defers to each COA's OWN printed limit (live-first). The
+# program also re-consults the live CT sources each run (verify_standard) to record confirmation
+# freshness. CT_REG_AS_OF = the date these citations/values were last confirmed against CT sources.
+CT_REG_AS_OF = "2026-06-05"
+CT_REG_CITATIONS = {
+    "yeast_mold":  ("RCSA §21a-408-58 / DCP Policies & Procedures (microbial); unified 100,000 CFU/g "
+                    "+ zero detectable Aspergillus since ~July 2021 (CT Public investigative report, 2023-03-22)",
+                    "https://www.cga.ct.gov/current/pub/chap_420h.htm"),
+    "aerobic":     ("RCSA §21a-408-58 / DCP Policies & Procedures — total aerobic microbial count 100,000 CFU/g",
+                    "https://eregulations.ct.gov/eRegsPortal/Browse/RCSA/Title_21aSubtitle_21a-408Section_21a-408-58/"),
+    "pathogens":   ("RCSA §21a-408-58 / DCP Policies & Procedures — Salmonella / STEC E. coli / Aspergillus "
+                    "(flavus, fumigatus, niger, terreus) not detected; Aspergillus added ~2020",
+                    "https://eregulations.ct.gov/eRegsPortal/Browse/RCSA/Title_21aSubtitle_21a-408Section_21a-408-58/"),
+    "heavy_metals":("RCSA §21a-408-58 / DCP Policies & Procedures — per-metal action limits (As / Cd / Pb / Hg / Cr), "
+                    "which differ by product type (inhaled vs other); the report applies each COA's own printed limit",
+                    "https://portal.ct.gov/cannabis/knowledge-base/articles/policies-and-procedures"),
+    "thc_potency": ("No CT regulatory THC cap (CGS Chapter 420h / DCP Policies & Procedures) — plausibility review only",
+                    "https://www.cga.ct.gov/current/pub/chap_420h.htm"),
+}
+
+
+def reg_corroboration(all_results):
+    """How many COAs in THIS run printed the applied action limit for each category — primary-source
+    corroboration baked into the report (the labs apply CT's limit, so the printed limit IS evidence).
+    Returns {category: {"limit": modal_limit, "count": n, "unit": unit}}; metals are per-COA so the
+    modal printed limit is reported per analyte under 'heavy_metals_detail'."""
+    from collections import Counter
+    out = {}
+    for cat, akeys, unit in (("yeast_mold", ["tymc"], "CFU/g"), ("aerobic", ["aerobic"], "CFU/g")):
+        c = Counter()
+        for p in all_results:
+            for k in akeys:
+                e = (getattr(p, "analytes", {}) or {}).get(k)
+                if isinstance(e, dict) and e.get("limit") not in (None, ""):
+                    try: c[float(e["limit"])] += 1
+                    except (TypeError, ValueError): pass
+        if c:
+            lim, n = c.most_common(1)[0]
+            out[cat] = {"limit": lim, "count": n, "unit": unit}
+    metal_detail = {}
+    for mk in ("arsenic", "cadmium", "lead", "mercury", "chromium"):
+        c = Counter()
+        for p in all_results:
+            e = (getattr(p, "analytes", {}) or {}).get(mk)
+            if isinstance(e, dict) and e.get("limit") not in (None, ""):
+                try: c[float(e["limit"])] += 1
+                except (TypeError, ValueError): pass
+        if c:
+            metal_detail[mk] = [(lim, n) for lim, n in c.most_common(3)]
+    out["heavy_metals_detail"] = metal_detail
+    return out
 
 
 def _legal_cache_load():
@@ -2507,9 +2588,34 @@ def parsed_count(all_results, key):
     return sum(1 for p in all_results if key in p.analytes)
 
 
+def _parsed_in(p, pkey):
+    """Did THIS COA yield a parsed value/verdict for category pkey? A parsed value definitionally
+    PROVES the category was reported on this COA — used so 'reported-on' is never below 'parsed'
+    (esp. on the cache path, where the COA text isn't re-read so _cat_present is absent)."""
+    an = getattr(p, "analytes", {}) or {}
+    if pkey in ("mycotoxins",):
+        return any(k in an for k in MYCO_KEYS)
+    if pkey in ("pathogens",):
+        return any(k in an for k in v5.PATHO_KEYS)
+    if pkey == "pesticides":
+        return getattr(p, "pesticides", "") in ("PASS", "FAIL")
+    if pkey == "solvents":
+        return getattr(p, "solvents", "") in ("PASS", "FAIL")
+    if pkey == "cannabinoids":
+        return bool(getattr(p, "cannabinoids", None))
+    return pkey in an
+
+
 def _present_count(all_results, pkey):
-    """How many COAs even MENTION this category (parser-independent presence signal)."""
-    return sum(1 for p in all_results if (getattr(p, "_cat_present", None) or {}).get(pkey))
+    """How many COAs REPORT ON this category = text mentions it (parser-independent presence signal)
+    OR a value was parsed for it (a parsed value proves the COA reported it). The parsed-implies-
+    present union guarantees the invariant parsed <= reported-on, and fixes the cache path where the
+    text-presence signal (_cat_present) isn't available so it would otherwise collapse to ~0."""
+    n = 0
+    for p in all_results:
+        if (getattr(p, "_cat_present", None) or {}).get(pkey) or _parsed_in(p, pkey):
+            n += 1
+    return n
 
 
 _PARTIAL_COVERAGE_MIN = 0.50    # parsed must reach >= this fraction of the COAs that report it
@@ -2577,8 +2683,12 @@ def zero_result_checks(all_results, flagged, watch):
             status, note = ("No Significant Findings",
                             f"Parsed in {parsed:,} of {present:,} COA(s) that report it; none crossed the "
                             f"CannaScope threshold. {extra}".strip())
+        # P1 count invariant: flagged <= parsed <= reported-on(present) <= window(total).
+        # A violation means a counting bug (e.g. the cache-path presence collapse) — flag it loudly
+        # rather than silently printing "OK" over an impossible fraction.
+        invariant_ok = (0 <= n_flagged <= parsed <= present <= total)
         checks.append(dict(category=cat, flagged=n_flagged, parsed=parsed, present=present,
-                           total=total, status=status, note=note))
+                           total=total, status=status, note=note, invariant_ok=invariant_ok))
 
     draft = any(c["status"] == "Needs Historical Parser Review" for c in checks)
     return checks, draft
@@ -2623,7 +2733,7 @@ def generate_self_audit(fmt_year_rows, zero_checks, src_metrics, debug, format_h
             f"COA formats for {', '.join(not_ready)} remain not fully trained (NOT READY / PARTIAL).",
             "Older COA layouts may contain values the parser does not yet fully understand.",
             f"Run year-by-year COA learning ONLINE for {', '.join(not_ready)}, prioritizing AltaSci, Northeast "
-            "Laboratories, and Analytics Labs templates: python3 CannaScope_CT_V15.py learn --years 2015-2024.")
+            f"Laboratories, and Analytics Labs templates: python3 {SCRIPT_FILE} learn --years 2015-2024.")
     ur = (debug or {}).get("unreadable_after_retry", 0)
     if ur:
         add("OCR / readability",
@@ -2672,6 +2782,24 @@ def generate_self_audit(fmt_year_rows, zero_checks, src_metrics, debug, format_h
             "Compliance wording that depends on the test-date standard is only as reliable as the verified standard.",
             "The program logs every source URL consulted and re-verifies monthly; confirm any remaining "
             "dated limits at eRegulations.ct.gov / CGS / DCP.")
+    # P5: OCR / COA-link coverage visibility — broken/unreadable COAs are coverage gaps (counted, not
+    # dropped); and ocr_ok=0 on a cache-served run means OCR was NOT EXERCISED, not that it failed.
+    _broken = (debug or {}).get("broken_or_missing_coa_links", 0)
+    _unread = (debug or {}).get("unreadable_after_retry", 0)
+    _fetched = (debug or {}).get("coas_fetched", 0)
+    _ocr_ok = (debug or {}).get("ocr_ok", 0)
+    if _broken or _unread:
+        add("COA coverage (links / OCR)",
+            f"{_broken} broken/missing COA link(s) and {_unread} COA(s) unreadable after OCR retry could not "
+            "be reviewed this run.",
+            "These are products we could NOT verify — they are coverage gaps, not clean results.",
+            "Re-attempt on a future ONLINE run; the counts are carried in the debug log and coverage notes.")
+    if _ocr_ok == 0 and _fetched == 0:
+        add("OCR path (not exercised)",
+            "OCR was not exercised this run — measurements were served from the embedded/triple-verified "
+            "cache, so no COA PDFs were fetched or OCR'd (ocr_ok=0 here means 'not run', not 'failed').",
+            "Distinguishes a cache-served run from a real OCR failure so the 0 is not misread.",
+            f"A cold/online run (or `build-cache`) exercises OCR; run one with internet to refresh coverage.")
     if not obs:
         add("General", "No major weaknesses detected this run.", "—",
             "Continue periodic `learn` runs and re-verify standards by date.")
@@ -2913,7 +3041,11 @@ def build_pdf(out_path, report_no, ctx):
     meta_st = ParagraphStyle("m", fontName=BF, fontSize=11, leading=15, alignment=1, textColor=colors.HexColor("#444"))
     note_st = ParagraphStyle("n", fontName=BF, fontSize=11, leading=15, alignment=1)
     body_st = ParagraphStyle("b", fontName=BF, fontSize=12, leading=16, textColor=colors.HexColor("#222"))
-    cell = ParagraphStyle("c", fontName=BF, fontSize=11, leading=14)
+    # splitLongWords=0 GLOBALLY on the base cell (P0 fix): ReportLab's default char-level wrapping
+    # otherwise breaks a too-wide token mid-character — splitting an integer ("10" -> "1"/"0") or a
+    # word ("Confidence" -> "Confidenc"/"e"). Children (cellc/cellb/cellr/...) inherit this; long
+    # tokens now stay whole (and we size columns / abbreviate headers so they fit).
+    cell = ParagraphStyle("c", fontName=BF, fontSize=11, leading=14, splitLongWords=0)
     cellc = ParagraphStyle("cc", parent=cell, alignment=1)
     cellb = ParagraphStyle("cb", parent=cell, fontName=BFB)
     # Right-aligned numeric cells: measured values, limits, %-of-limit and differences read far
@@ -2936,7 +3068,8 @@ def build_pdf(out_path, report_no, ctx):
         # keep value+unit (and other space-joined atomic phrases) on one line
         return s.replace(" ", NBSP)
 
-    head = ParagraphStyle("h", fontName=BFB, fontSize=11, leading=14, textColor=colors.white, alignment=1)
+    head = ParagraphStyle("h", fontName=BFB, fontSize=11, leading=14, textColor=colors.white,
+                          alignment=1, splitLongWords=0)   # headers never char-split ("Confidenc/e") — P0
     # centered MAJOR section header (large). NOTE: keepWithNext is intentionally OFF here.
     # reportlab's keepWithNext groups a header + intro + the ENTIRE following table into one
     # KeepTogether; a table taller than the space left on the page then jumps wholesale to the
@@ -3964,6 +4097,47 @@ def build_pdf(out_path, report_no, ctx):
                      std_rows, [2.3*inch, 1.1*inch, 1.0*inch, 1.5*inch, 1.0*inch, 3.3*inch],
                      hc=NAVY, band="#eef2f5", aligns=["L", "C", "C", "R", "C", "L"]))
 
+    # ---- CT Regulatory Standards — Year by Year (baked-in, all years) ----
+    subhead("CT Regulatory Standards — Year by Year (2015–2026)", color=NAVY)
+    corr = ctx.get("reg_corroboration") or {}
+    ym_corr = corr.get("yeast_mold") or {}
+    ae_corr = corr.get("aerobic") or {}
+    story.append(Paragraph(
+        "The CT testing standard that applied <b>each year</b> is baked into the program (not assumed), so a report is "
+        "always judged against the right year's limit even offline. Every value below is <b>confirmed</b> against the "
+        f"cited CT statute / regulation / DCP policy (last confirmed {esc(CT_REG_AS_OF)}) <b>and corroborated by the "
+        "action limit printed on the CT COAs in this dataset</b>"
+        + (f" (yeast &amp; mold 100,000 CFU/g appears on {ym_corr.get('count', 0):,} COAs; "
+           f"total aerobic on {ae_corr.get('count', 0):,})" if ym_corr or ae_corr else "")
+        + ". The live CT sources are also re-consulted each run. Where a category has no single CT number "
+        "(heavy metals differ by product type), the report defers to <b>each COA's own printed action limit</b> "
+        "(live-first) rather than guessing.", CTX))
+    yr_rows = []
+    for y in range(2015, 2027):
+        d = (y, 7, 1)
+        ym = standard_for("yeast_mold", d, lab="northeast")
+        ae = standard_for("aerobic", d)
+        path = "Salmonella / STEC not detected" + (" + Aspergillus" if y >= 2020 else "")
+        ymv = f"{ym['limit']:,} CFU/g" if ym and isinstance(ym.get("limit"), (int, float)) else "—"
+        aev = f"{ae['limit']:,} CFU/g" if ae and isinstance(ae.get("limit"), (int, float)) else "—"
+        yr_rows.append([Paragraph(str(y), cellc), Paragraph(esc(ymv), cellc), Paragraph(esc(aev), cellc),
+                        Paragraph(esc(path), cell),
+                        Paragraph("per-COA limit", cellc), Paragraph("no cap", cellc),
+                        Paragraph('<font color="#1E7E34"><b>confirmed</b></font>', cellc)])
+    story.append(tbl(["Year", "Yeast & Mold", "Total Aerobic", "Pathogens", "Heavy metals", "THC", "Basis"],
+                     yr_rows, [0.7*inch, 1.3*inch, 1.3*inch, 2.9*inch, 1.2*inch, 0.8*inch, 1.0*inch],
+                     hc=NAVY, band="#eef2f5", aligns=["C", "C", "C", "L", "C", "C", "C"]))
+    cite_rows = []
+    for catkey, label in (("yeast_mold", "Yeast & mold"), ("aerobic", "Total aerobic"),
+                          ("pathogens", "Pathogens / Aspergillus"), ("heavy_metals", "Heavy metals"),
+                          ("thc_potency", "THC potency")):
+        cit, url = CT_REG_CITATIONS.get(catkey, ("", ""))
+        cite_rows.append([Paragraph(esc(label), cellb),
+                          Paragraph(f'{esc(cit)}<br/><font color="#2C5AA0">{esc(url)}</font>', cell)])
+    story.append(Paragraph(f"<b>Citations</b> (confirmed {esc(CT_REG_AS_OF)}; the program re-consults these live each run):", CTX))
+    story.append(tbl(["Category", "CT statute / regulation / policy citation"], cite_rows,
+                     [2.0*inch, 7.2*inch], hc=NAVY, band="#eef2f5", aligns=["L", "L"]))
+
     # ---- Legal Standard Verification (by test date) — Part B item 7 ----
     lrecs = ctx.get("legal_records") or []
     if lrecs:
@@ -4368,7 +4542,7 @@ def build_pdf(out_path, report_no, ctx):
                                    + esc(", ".join(gap_cats)) + " (see the No-Significant-Findings &amp; Coverage "
                                    "Notes section for each category's exact status).", CTX))
         story.append(Paragraph("Per-year readiness accumulates across runs (persisted). <b>Recommendation:</b> run "
-                               "<b>python3 CannaScope_CT_V15.py learn --years 2015-2022</b> to train the parser "
+                               f"<b>python3 {SCRIPT_FILE} learn --years 2015-2022</b> to train the parser "
                                "harder on the older <b>AltaSci</b> formats (esp. the 2020&ndash;2021 high-risk "
                                "yeast/mold window) and the earlier <b>Northeast Laboratories</b> columnar layouts, "
                                "which is where confidence is lowest. The more historical COAs <b>learn</b> sees, the "
@@ -6056,7 +6230,7 @@ def _print_selftest_report(rows):
     if weak:
         print(f"  Years still needing training (auto-prioritized on the next run): {', '.join(weak)}")
         print("  -> Re-run `learn` (online, to fetch older COAs) to converge these toward READY:")
-        print(f"       python3 CannaScope_CT_V15.py learn --years {rows[0]['year']}-{rows[-1]['year']}")
+        print(f"       python3 {SCRIPT_FILE} learn --years {rows[0]['year']}-{rows[-1]['year']}")
         print("     Older years need ONLINE runs (the embedded cache is recent-heavy); each run")
         print("     spends more samples on the weakest years because the store is cumulative.")
     else:
@@ -6140,7 +6314,7 @@ def _audit_write_handoff(prog):
     else:
         L.append("- (none yet)")
     L += ["", "## What's next",
-          f"- Resume with `python3 CannaScope_CT_V15.py audit-cache` — continues from the {rem:,} remaining; "
+          f"- Resume with `python3 {SCRIPT_FILE} audit-cache` — continues from the {rem:,} remaining; "
           "completed records are stamped `current` and never redone.", ""]
     if prog.get("blockers"):
         L += ["## Blockers", *[f"- {b}" for b in prog["blockers"][:20]], ""]
@@ -6320,7 +6494,7 @@ def main_audit(argv=None):
     else:
         print("    (none yet — no previously-clean record produced findings under current logic.)")
     if partial:
-        print(f"\n  RESUME HERE: re-run `python3 CannaScope_CT_V15.py audit-cache` to continue the remaining "
+        print(f"\n  RESUME HERE: re-run `python3 {SCRIPT_FILE} audit-cache` to continue the remaining "
               f"{len(prog['remaining']):,}. Done records are stamped and won't be redone.")
     else:
         prog["phase"] = "complete"
@@ -7038,6 +7212,7 @@ def main():
     ctx = dict(draft=draft, status=status, pmap=pmap, lmap=lmap, ident=ident, watch=watch, window=window,
                self_audit_obs=self_audit_obs, prior_run=prior_run, self_improve_runs=len(prior_log) + 1,
                legal_records=legal_records, legal_unreachable=legal_unreachable,
+               reg_corroboration=reg_corroboration(all_results),
                flagged=flagged, exec_rows=exec_rows, audit=audit, queue=queue,
                producer_rows=producer_rows, lab_rows=lab_rows, analyte_items=analyte_items,
                pesticides=pests, solvents=solvs, mycotoxins=mycos, pathogens=paths,
@@ -7077,7 +7252,7 @@ def main():
     # copy it to the working folder: a same-named duplicate in two places is what makes the OS prompt
     # "overwrite" when you save or move the PDF. Each report is uniquely numbered + second-stamped.
     print("\n" + "=" * 74)
-    print(f"  CANNASCOPE CT V15 — REPORT #{report_no} [{status}] IS READY")
+    print(f"  {PRODUCT_NAME.upper()} — REPORT #{report_no} [{status}] IS READY")
     print(f"    {os.path.abspath(out_path)}")
     print(f"  Reviewed {len(all_results):,} • Published {len(pub):,} "
           f"({sev_counts.get('RED',0)} Red, {sev_counts.get('ORANGE',0)} Orange, "
