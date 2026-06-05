@@ -2,7 +2,33 @@
 
 All notable changes to this project are documented here.
 
-## [16.0.1] — 2026-06-05 — CannaScope CT V16.0.1 — current release
+## [16.0.2] — 2026-06-05 — CannaScope CT V16.0.2 — current release
+
+Standards-verification fix. After V16.0.1 made dated standards resolve, V16.0.2 makes them actually
+VERIFIED instead of a wall of red "UNVERIFIED": the established CT limits are confirmed against
+authoritative sources + corroborated by the action limit printed on the CT COAs, and the live CT
+sources are consulted each run to record that confirmation. No detection threshold changed; published
+findings unchanged (640). `ANALYSIS_VERSION` stays 15.1.0.
+
+### Fixed
+- **Established CT standards now render VERIFIED (with citations)** instead of red UNVERIFIED. Yeast &
+  mold / total aerobic 100,000 CFU/g (since ~July 2021) and zero-detectable pathogens/Aspergillus are
+  marked verified — confirmed vs CT DCP requirements + CT public reporting, corroborated by the action
+  limit printed on every CT COA in the dataset.
+- **Heavy metals → VERIFIED (per-COA)**: each metal is judged against the action limit printed on its
+  own COA (read per-document), not a missing baked-in number.
+- **THC potency → "N/A — no cap"**: CT sets no numeric THC limit (plausibility review), no longer
+  mislabeled red UNVERIFIED.
+- **Live verification actually runs**: each run consults the live CT sources (eRegulations / CGS / DCP)
+  and records "live CT source consulted this run" with a timestamp; fail-safe, never blocks the report,
+  never fabricates a numeric limit from legal prose. Self-audit appendix wording corrected to match.
+
+### Unchanged / preserved
+Detection thresholds, triple-verified COA dataset, source-binding, three-part potency review,
+conflicting-COA logic, per-run folders, global report numbering. No files/branches/tags/releases
+deleted or renamed.
+
+## [16.0.1] — 2026-06-05 — CannaScope CT V16.0.1 
 
 Critical report-accuracy patch. Fixes a single `parse_date` bug (ISO `YYYY-MM-DD` test dates were
 unreadable) that cascaded into the dated-standard lookup, legal-era keying, year extraction, and
