@@ -16,8 +16,9 @@ NAMES, V4, V5, WORKER = (blob('ct_cannabis_names.py'), blob('cannascope_ct_v4.py
 CC = blob('coa_csv_cache.py')   # COA->measurement cache (imports v4/v5; install AFTER them)
 
 # Embedded caches (baked to speed first-time use; base64 has no '%', so it is template-safe).
-_RD = 'CannaScope CT V15 - Statewide Transparency Reports'
-for _alt in ('CannaScope CT V14 - Statewide Transparency Reports', 'CannaScope CT V13 - Statewide Transparency Reports', 'CannaScope CT Beta V12.1 - Statewide Transparency Reports', 'CannaScope CT Beta V12 - Statewide Transparency Reports', 'CannaScope CT Beta V11.1 - Statewide Transparency Reports'):
+# Prefer the V16 folder; fall back to the V15 folder (and older) so a not-yet-migrated checkout still builds.
+_RD = 'CannaScope CT V16 - Statewide Transparency Reports'
+for _alt in ('CannaScope CT V15 - Statewide Transparency Reports', 'CannaScope CT V14 - Statewide Transparency Reports', 'CannaScope CT V13 - Statewide Transparency Reports', 'CannaScope CT Beta V12.1 - Statewide Transparency Reports', 'CannaScope CT Beta V12 - Statewide Transparency Reports', 'CannaScope CT Beta V11.1 - Statewide Transparency Reports'):
     if not os.path.exists(os.path.join(_RD,'Registry Cache.csv')) and os.path.exists(os.path.join(_alt,'Registry Cache.csv')):
         _RD=_alt
 if not os.path.exists(os.path.join(_RD,'Registry Cache.csv')):

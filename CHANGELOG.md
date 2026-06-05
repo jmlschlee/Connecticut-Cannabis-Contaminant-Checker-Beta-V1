@@ -2,7 +2,16 @@
 
 All notable changes to this project are documented here.
 
-## [16.1.0] — 2026-06-05 — CannaScope CT V16.1.0 — current release
+## [16.1.1] — 2026-06-05 — CannaScope CT V16.1.1 — current release
+
+Folder-name fix: the output folder is renamed from the stale "CannaScope CT V15 - Statewide
+Transparency Reports" to "CannaScope CT V16 - …". `OUT_DIR` was never bumped at the V15→V16
+transition. The V15 folder is now first in `LEGACY_OUT_DIRS` so an existing install auto-migrates
+(renamed in place) — cache, regulatory ledger, prior reports, and the global report-number sequence
+all carry over; nothing re-downloaded. `_make_v16.py` prefers the V16 folder (V15 fallback). No
+detection logic changed; `ANALYSIS_VERSION` stays 15.1.0. All prior releases remain live.
+
+## [16.1.0] — 2026-06-05 — CannaScope CT V16.1.0 
 
 Bakes the per-year CT regulatory standard for every year (2015–2026) into the program with
 authoritative citations, COA corroboration, and a confirmation date; fixes character-level rendering

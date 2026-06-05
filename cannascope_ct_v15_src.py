@@ -74,11 +74,11 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V16.1.0"
+APP_NAME = "CannaScope CT V16.1.1"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "16.1.0"
+SOFTWARE_VERSION = "16.1.1"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
 # Single source of truth for the actual shipped single-file name (major version only), used in EVERY
 # rendered/printed recommendation and disclaimer so the report never names a stale script (P4 fix).
@@ -294,11 +294,13 @@ MAX_TABLE_ROWS = 75      # per-section PDF row cap. A single-year run rarely hit
                          # severity, so the cap keeps the worst N; the COMPLETE,
                          # uncapped data always lives in the per-section CSV exports.
 
-OUT_DIR = "CannaScope CT V15 - Statewide Transparency Reports"
+OUT_DIR = "CannaScope CT V16 - Statewide Transparency Reports"
 # Inside each per-run output folder, all CSV + diagnostic exports go in this subfolder so the run
 # folder stays tidy (just the PDF + this one "Data Exports" subfolder).
 _EXPORTS_SUBDIR = "Data Exports"
-LEGACY_OUT_DIRS =["CannaScope CT V14 - Statewide Transparency Reports", "CannaScope CT V13 - Statewide Transparency Reports", "CannaScope CT Beta V12.1 - Statewide Transparency Reports", "CannaScope CT Beta V12 - Statewide Transparency Reports", "CannaScope CT Beta V11.1 - Statewide Transparency Reports"]   # auto-migrated to OUT_DIR if present (V14 folder first -> V15 inherits its cache, reports, and global report-number sequence)
+# The V15-named folder is FIRST so an existing V15 install auto-migrates (renamed) to the V16 folder on
+# next run — carrying its cache, the regulatory ledger, and the global report-number sequence forward.
+LEGACY_OUT_DIRS =["CannaScope CT V15 - Statewide Transparency Reports", "CannaScope CT V14 - Statewide Transparency Reports", "CannaScope CT V13 - Statewide Transparency Reports", "CannaScope CT Beta V12.1 - Statewide Transparency Reports", "CannaScope CT Beta V12 - Statewide Transparency Reports", "CannaScope CT Beta V11.1 - Statewide Transparency Reports"]   # auto-migrated to OUT_DIR if present (V15 folder first -> V16 inherits its cache, reports, and global report-number sequence)
 CACHE_DIR = os.path.join(OUT_DIR, "Flagged COA Source PDFs")
 REGISTRY_CACHE = os.path.join(OUT_DIR, "Registry Cache.csv")
 LEDGER = os.path.join(OUT_DIR, "Already-Scanned Skip List.txt")
