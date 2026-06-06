@@ -78,11 +78,11 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V16.3.2"
+APP_NAME = "CannaScope CT V16.3.3"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "16.3.2"
+SOFTWARE_VERSION = "16.3.3"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
 # Single source of truth for the actual shipped single-file name (major version only), used in EVERY
 # rendered/printed recommendation and disclaimer so the report never names a stale script (P4 fix).
@@ -326,10 +326,18 @@ SELF_IMPROVE_LOG = os.path.join(OUT_DIR, "Self-Improvement Log.json")
 # stamped AND every UNSTAMPED legacy-ledger record then becomes stale and is re-evaluated by the
 # `audit-cache` subcommand. (The existing legacy ledger is entirely unstamped, so all of it is a
 # re-eval candidate — which is exactly the pre-V16 concern: records skipped before newer logic.)
-ANALYSIS_VERSION = "16.3.0"   # BUMP on any detection-logic change (product-type guardrail, potency
-                              # math, microbial bound handling, limit selection, self-audit categories).
-                              # The clean-ledger is stamped with this; entries from an OLDER analysis
-                              # version are NOT trusted as clean and are re-evaluated under the new rules.
+ANALYSIS_VERSION = "16.3.3"   # BUMP on any detection-logic change (product-type guardrail, potency
+                              # math, microbial bound handling, limit selection, self-audit categories,
+                              # multi-product per-product isolation). The clean-ledger is stamped with
+                              # this; entries from an OLDER analysis version are NOT trusted as clean and
+                              # are re-evaluated under the new rules.
+# MULTI-PRODUCT COA per-product isolation (the splitter) on the PUBLISHED path. When a fetched COA
+# document holds >1 product, parse ONLY the block that uniquely matches this registry record; if it
+# cannot be uniquely tied to one block, SUPPRESS extraction and route to manual review rather than
+# risk attributing another product's contaminants to this one. Only affects cold/online reads (cache
+# hits carry no text). MULTIPRODUCT_MIN_CONF = the lowest isolation confidence we will trust.
+MULTIPRODUCT_SPLIT_ENABLED = True
+MULTIPRODUCT_MIN_CONF = 0.7
 AUDIT_STAMPS = os.path.join(OUT_DIR, "Cache Audit Stamps.json")   # {coa_key: {analysis_version, result, n_findings, stamped_at}}
 # Persistent OCR-text cache: an image-only COA is OCR'd ONCE EVER (keyed by file content hash), so
 # re-scans / audit-cache / --force-rescan skip the expensive Apple-Vision subprocess. Only successful
@@ -1651,11 +1659,68 @@ def _process_product(p, session, watch):
         p.parse_note = p.parse_note or "could not download COA"
         p._coa_status = MATCH_LINK_BROKEN if p.report_url else MATCH_LINK_MISSING
         return p
-    text = v4.read_pdf_text(path)
-    if len(text.strip()) < 40:
+    full_text = v4.read_pdf_text(path)
+    if len(full_text.strip()) < 40:
         p.parse_note = "no extractable text (scanned image?)"
         p._coa_status = MATCH_LINK_BROKEN
         return p
+    # ---- MULTI-PRODUCT COA handling — runs BEFORE parsing so one product's contaminants can never be
+    # attributed to another (2015-era docs, e.g. Northeast Laboratories, pack several products into ONE
+    # document). Signatures learned from confirmed real docs (DearFerrarese.pdf):
+    #   - 2+ distinct Laboratory ID # suffixes (1562829-01, -02 ...)  -> one product per page (Layout B)
+    #   - 2+ distinct Product Description values, and/or 2+ CT registration numbers (MMBR.######)
+    # Pages sharing one Lab ID are PANELS of the SAME sample and are COMBINED, never split (Layout A).
+    # We parse ONLY the block that uniquely matches THIS registry record; if it can't be uniquely tied
+    # to one block we SUPPRESS extraction and route to manual review (never cross-attribute). Only cold
+    # reads reach here — cache hits carry no text. (The single-product parser previously read the whole
+    # document and would mis-attribute the first product's results, so this CLOSES a real bug.)
+    text = full_text
+    p._multi_product_coa = False
+    p._multi_product_info = None
+    p._multi_product_isolated = False
+    p._multi_product_unresolved = False
+    if mp is not None:
+        try:
+            _mpd = mp.analyze_document(text=full_text)
+            p._multi_product_coa = bool(_mpd.get("is_multi_product"))
+            if p._multi_product_coa:
+                p._multi_product_info = {
+                    "n_products": _mpd.get("n_products"),
+                    "signal": _mpd.get("signal"),
+                    "layout": _mpd.get("layout"),
+                    "products": [{"lab_id": q.get("lab_id"),
+                                  "product_description": q.get("product_description"),
+                                  "panels": q.get("panels")} for q in _mpd.get("products", [])],
+                }
+                # Only isolate/suppress when there are genuinely 2+ resolvable product blocks to choose
+                # between. A weak signal (e.g. 2 registration numbers on an otherwise single-product COA)
+                # leaves n_products < 2 — parse the whole document normally, never suppress.
+                if MULTIPRODUCT_SPLIT_ENABLED and (_mpd.get("n_products") or 0) >= 2:
+                    _blk, _conf, _reason = mp.isolate_product(
+                        text=full_text,
+                        target_name=getattr(p, "product_name", "") or "",
+                        target_lab_id=getattr(p, "_lab_id_hint", "") or "",
+                        target_batch=(getattr(p, "batch", "") or getattr(p, "lot", "") or ""))
+                    if _blk and _conf >= MULTIPRODUCT_MIN_CONF:
+                        text = _blk                       # parse ONLY this product's block
+                        p._multi_product_isolated = True
+                        p._multi_product_isolation = {"confidence": _conf, "reason": _reason}
+                    else:
+                        # Cannot uniquely identify this product in the shared document. Publishing ANY
+                        # extraction risks cross-attribution -> suppress + route to manual review.
+                        p._multi_product_unresolved = True
+                        p.parse_note = (f"multi-product COA ({_mpd.get('n_products')} products): could not "
+                                        f"uniquely isolate this product ({_reason}); routed to manual "
+                                        "review (not extracted)")[:200]
+                        p._coa_status = MATCH_MANUAL
+                        p._cat_present = {}
+                        p._coa_present = True
+                        return p
+        except Exception:
+            # Detection must never break a scan; fall back to the MMBR-only signal (no substitution).
+            _regs = {m.group(0).upper().replace(" ", "") for m in re.finditer(r"MMBR\.?\s?\d{4,}", full_text or "")}
+            p._multi_product_coa = (len(_regs) >= 2)
+            text = full_text
     p.overall_result = v4.find_overall_result(text)
     p.test_lab = v4.parse_lab(text)
     v4.parse_analytes(text, p)
@@ -1672,36 +1737,6 @@ def _process_product(p, session, watch):
     # Per-category presence (does each panel's wording appear at all?) — lets the zero-result
     # logic tell a true historical absence from a parser gap. Computed while the text is in hand.
     p._cat_present = _detect_presence(text)
-    # MULTI-PRODUCT COA DETECTION (2015-era docs sometimes packed several products into ONE document).
-    # DETECTION/SURFACING for now: we do NOT yet substitute the per-product block into the published
-    # extraction (that needs a per-record statewide regression + a version bump, and cross-attribution
-    # risk is unacceptable for a safety report) — this RECOGNIZES the document and surfaces it. It does
-    # not change what is published (these docs currently extract empty, so nothing is suppressed).
-    # Real signatures learned from confirmed 2015 Northeast Laboratories docs (e.g. DearFerrarese.pdf):
-    #   - 2+ distinct Laboratory ID # suffixes (1562829-01, -02 ...)  -> one product per page (Layout B)
-    #   - 2+ distinct Product Description values in one document
-    #   - 2+ distinct CT registration numbers (MMBR.######) — the data.ct.gov-era signal
-    # NOTE: the 2015 lab format puts each product's own panel on a SEPARATE page; pages sharing one
-    # Lab ID are panels of the SAME sample and are correctly COMBINED, never split (Layout A).
-    p._multi_product_coa = False
-    p._multi_product_info = None
-    if mp is not None:
-        try:
-            _mpd = mp.analyze_document(text=text)
-            p._multi_product_coa = bool(_mpd.get("is_multi_product"))
-            if p._multi_product_coa:
-                p._multi_product_info = {
-                    "n_products": _mpd.get("n_products"),
-                    "signal": _mpd.get("signal"),
-                    "layout": _mpd.get("layout"),
-                    "products": [{"lab_id": q.get("lab_id"),
-                                  "product_description": q.get("product_description"),
-                                  "panels": q.get("panels")} for q in _mpd.get("products", [])],
-                }
-        except Exception:
-            # Detection must never break a scan; fall back to the MMBR-only signal.
-            _regs = {m.group(0).upper().replace(" ", "") for m in re.finditer(r"MMBR\.?\s?\d{4,}", text or "")}
-            p._multi_product_coa = (len(_regs) >= 2)
     # COA FORMAT LEARNING LAYER: fingerprint this COA's format + cross-check the extraction
     # while the text is in hand. Stored so the pipeline can hold uncertain extractions and the
     # learner can build a per-year readiness map. Defensive — never let it break a scan.
@@ -3053,16 +3088,18 @@ def generate_self_audit(fmt_year_rows, zero_checks, src_metrics, debug, format_h
             "Changing results across COAs for one identifier are review leads (and the gate now warns on them).",
             "Compare the versions in the Multiple/Conflicting COA Records section against the live COAs.")
     if _d.get("multi_product_coa_documents"):
+        _iso = _d.get("multi_product_coa_isolated", 0)
+        _unr = _d.get("multi_product_coa_routed_to_review", 0)
         add("Multi-product COA documents (2015-era)",
-            f"{_d['multi_product_coa_documents']} COA document(s) appear to contain MORE THAN ONE product "
+            f"{_d['multi_product_coa_documents']} COA document(s) hold MORE THAN ONE product "
             "(2+ distinct Laboratory ID #s, product descriptions, or registration numbers) — the known 2015-era "
-            "Northeast Laboratories layout where each product's panel is on a separate page.",
-            "A per-product splitter exists and is validated (groups pages by Laboratory ID #, combining the "
-            "panels of one sample and isolating distinct products) but block-substitution into the published "
-            "extraction is not yet enabled; these still extract no measurements (a coverage gap, NOT "
-            "cross-attributed). Recognized and surfaced — safe by construction.",
-            "Enable per-product isolation once a per-record statewide regression confirms no cross-attribution; "
-            "records that cannot be uniquely tied to one block are routed to manual review rather than guessed.")
+            "Northeast Laboratories layout where each product's panel/record is on a separate page.",
+            f"Per-product isolation is ENABLED: {_iso} record(s) were uniquely tied to one product's block and "
+            f"parsed from that block alone; {_unr} record(s) could not be uniquely identified within the shared "
+            "document and were SUPPRESSED and routed to manual review — one product's results are never attributed "
+            "to another. (Pages sharing a Laboratory ID # are panels of one sample and are combined.)",
+            "Review the routed records manually (the registry name did not uniquely match one block — typically a "
+            "shared base strain name); a more specific batch / Laboratory ID # on the record would let it isolate.")
     add("Cache / ledger re-evaluation",
         f"Clean-ledger entries are version-stamped; only those verified under ANALYSIS_VERSION {ANALYSIS_VERSION} "
         "are trusted as skippable — older/legacy-clean records are re-evaluated under the newest rules.",
@@ -5000,8 +5037,10 @@ def build_pdf(out_path, report_no, ctx):
         "potency_parser_conflicts": "Cannabinoid extractions with an internal conflict — held OUT of findings, routed to review.",
         "thc_over_total_cannabinoids_conflicts": "Rows where Total THC > Total Cannabinoids (impossible) — held for COA re-read, not published.",
         "product_type_mismatch_held": "Flower-classified rows with >45% Total THC (implausible for flower) — held for product-type review, not published as high-THC flower.",
-        "multi_product_coa_documents": "COA documents that appear to hold 2+ products (2015-era Northeast Labs layout: distinct Laboratory ID #s / product descriptions / registration numbers) — recognized & surfaced. A validated per-product splitter exists; block-substitution into published extraction is not yet enabled, so these remain a coverage gap (never cross-attributed).",
+        "multi_product_coa_documents": "COA documents that hold 2+ products (2015-era Northeast Labs layout: distinct Laboratory ID #s / product descriptions / registration numbers). Per-product isolation is ENABLED — each record is parsed from only its own product's block, or suppressed and routed to review if it can't be uniquely identified (never cross-attributed).",
         "multi_product_coa_products_recognized": "Total distinct products recognized inside those multi-product documents (pages grouped by Laboratory ID #: panels of one sample are combined, distinct products are separated).",
+        "multi_product_coa_isolated": "Records inside a multi-product document that were uniquely tied to one product's block and parsed from that block alone.",
+        "multi_product_coa_routed_to_review": "Records inside a multi-product document that could NOT be uniquely identified within the shared document — extraction suppressed and routed to manual review rather than risk attributing another product's results.",
         "microbial_bound_too_broad_for_consumer_risk": "Microbial '< X CFU/g' bounds above 10,000 — passed dated standard but consumer-risk visibility UNDETERMINED.",
         "self_audit_remaining_issues": "Unresolved self-audit problems this run (target: 0).",
         "below_detect_results_excluded": "Below-detection (<X) results not published as measurements.",
@@ -7755,6 +7794,8 @@ def main():
         "multi_product_coa_products_recognized": sum(
             (getattr(p, "_multi_product_info", None) or {}).get("n_products", 0) or 0
             for p in all_results if getattr(p, "_multi_product_coa", False)),
+        "multi_product_coa_isolated": sum(1 for p in all_results if getattr(p, "_multi_product_isolated", False)),
+        "multi_product_coa_routed_to_review": sum(1 for p in all_results if getattr(p, "_multi_product_unresolved", False)),
         "infused_potency_ref": len(infused_potency),
         "vape_concentrate_extract_potency_ref": len(extract_potency),
         "potency_parser_conflicts": sum(1 for p in all_results if thc_conflict(p)),

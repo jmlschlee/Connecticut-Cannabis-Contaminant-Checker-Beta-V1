@@ -76,6 +76,18 @@ plain = ("ACME LABS Certificate of Analysis\nProduct: Blue Dream Flower\n"
 dp = mp.analyze_document(text=plain)
 check(dp["is_multi_product"] is False, "normal single COA NOT flagged multi-product")
 
+# ---- a single-product COA that merely MENTIONS 2 registration numbers must NOT be suppressed ----
+# (regression: weak mmbr signal with <2 resolvable blocks => parse the whole doc, never drop findings)
+twomm = ("ACME Labs COA\nProduct: Blue Dream Flower MMBR.0011111\nfacility MMBR.0022222\n"
+         "Total Yeast & Mold 1,200 CFU/g PASS\nLead <0.1 ppm PASS\n")
+blk, conf, _ = mp.isolate_product(text=twomm, target_name="Blue Dream Flower")
+check(blk == twomm and conf == 1.0,
+      "single-product COA mentioning 2 reg numbers -> parses whole doc (NOT suppressed)")
+
+# ---- isolate on text with zero recognizable blocks returns the whole text, not None ----
+blk, conf, _ = mp.isolate_product(text="random text no products here", target_name="x")
+check(blk is not None and conf == 1.0, "unrecognized text -> whole doc (never a false suppress)")
+
 print()
 if _fails:
     print(f"{len(_fails)} FAILED")

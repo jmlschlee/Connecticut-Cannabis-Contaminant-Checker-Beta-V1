@@ -2,7 +2,32 @@
 
 All notable changes to this project are documented here.
 
-## [16.3.2] — 2026-06-05 — CannaScope CT V16.3.2 — current release
+## [16.3.3] — 2026-06-05 — CannaScope CT V16.3.3 — current release
+
+Multi-product COA per-product isolation on the published path (fixes cross-attribution) + OCR page-cap
+fix. `ANALYSIS_VERSION` 16.3.0 → 16.3.3 (cold-read extraction can change; cache-path runs unchanged).
+All prior releases remain live.
+
+### Fixed
+- Cross-attribution: a COA document holding several products was parsed by the single-product parser,
+  which read the FIRST product's results and could attribute them to any record sharing the document URL.
+  Now each record is parsed from only its own product's block, or suppressed and routed to manual review.
+- OCR page cap: `ocr_pdf` / the OCR worker capped scanned docs at 6 pages (silently dropping later
+  products/panels); they now read the whole document, bounded to 40 pages.
+
+### Added / Changed
+- Per-product isolation enabled on the published path (`MULTIPRODUCT_SPLIT_ENABLED`,
+  `MULTIPRODUCT_MIN_CONF=0.7`); engages only when 2+ resolvable product blocks exist, so ordinary
+  single-product COAs are never suppressed.
+- Records that can't be uniquely tied to one block → `COA Needs Manual Review` (not extracted).
+- New debug metrics `multi_product_coa_isolated`, `multi_product_coa_routed_to_review`; self-audit and
+  glossary updated. Regression test `_test_multiproduct.py` → 19 checks.
+
+### Known limitation (tracked)
+- Two-column OCR microbial tables on isolated one-product-per-page pages aren't yet associated, so those
+  products isolate to empty (a safe coverage gap — never a wrong value).
+
+## [16.3.2] — 2026-06-05 — CannaScope CT V16.3.2 
 
 Multi-product COA recognition (additive, detection/surface-only). No findings changed; `ANALYSIS_VERSION`
 stays 16.3.0. All prior releases remain live.

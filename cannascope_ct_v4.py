@@ -591,28 +591,36 @@ def _ocr_backend() -> str:
     return _OCR_BACKEND
 
 
-def ocr_pdf(src, max_pages: int = 6) -> str:
+def ocr_pdf(src, max_pages: int = 6, hard_cap: int = 40) -> str:
     """Read a scanned/image COA via OCR so it is evaluated like any other. `src`
     may be PDF bytes or a path. The whole render+recognize is serialized under
     _PDF_LOCK (pdfium rendering is not thread-safe). Lines are preserved with
-    newlines so the row-based parser can still find analyte rows."""
+    newlines so the row-based parser can still find analyte rows.
+
+    A scanned COA with MORE than `max_pages` pages is read in FULL (up to `hard_cap`)
+    rather than truncated at `max_pages`: 2015-era multi-product documents put one
+    product per page beyond page 6 (and a long single-product COA can carry its panels
+    across many pages), so capping at 6 silently dropped whole products/panels. Single
+    products on the early pages can't reveal the later ones, so we don't gate on a text
+    signature — any >max_pages scanned doc is fully OCR'd (bounded by hard_cap)."""
     backend = _ocr_backend()
     if not backend:
         return ""
+
+    def _page_text(doc, i):
+        img = doc[i].render(scale=2.0).to_pil()
+        if backend == "ocrmac":
+            from ocrmac import ocrmac
+            res = ocrmac.OCR(img).recognize()
+            return "\n".join(r[0] for r in res)
+        import pytesseract
+        return pytesseract.image_to_string(img.convert("L"))
+
     with _PDF_LOCK:
         try:
             doc = pdfium.PdfDocument(src)
-            n = min(len(doc), max_pages)
-            out = []
-            for i in range(n):
-                img = doc[i].render(scale=2.0).to_pil()
-                if backend == "ocrmac":
-                    from ocrmac import ocrmac
-                    res = ocrmac.OCR(img).recognize()
-                    out.append("\n".join(r[0] for r in res))
-                else:
-                    import pytesseract
-                    out.append(pytesseract.image_to_string(img.convert("L")))
+            n = min(len(doc), max(max_pages, hard_cap))
+            out = [_page_text(doc, i) for i in range(n)]
             doc.close()
             return "\n".join(out)
         except Exception:

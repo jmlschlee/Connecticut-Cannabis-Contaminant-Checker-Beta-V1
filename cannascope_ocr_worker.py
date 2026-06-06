@@ -48,20 +48,30 @@ def main():
         return
     import pypdfium2 as pdfium
     doc = pdfium.PdfDocument(path)
-    out = []
-    for i in range(min(len(doc), max_pages)):
+
+    def _page_text(i):
         page = doc[i]
         bitmap = page.render(scale=scale)
         img = bitmap.to_pil()
         if backend == "ocrmac":
             from ocrmac import ocrmac
             res = ocrmac.OCR(img).recognize()
-            out.append("\n".join(r[0] for r in res))
+            t = "\n".join(r[0] for r in res)
         else:
             import pytesseract
-            out.append(pytesseract.image_to_string(img.convert("L")))
+            t = pytesseract.image_to_string(img.convert("L"))
         bitmap.close()
         page.close()
+        return t
+
+    # A scanned COA with MORE than `max_pages` pages is read in FULL (up to hard_cap) rather than
+    # truncated: 2015-era multi-product documents put one product per page beyond page 6 (and a long
+    # single-product COA can carry its panels across many pages), so capping at 6 silently dropped
+    # whole products/panels. Early single-product pages can't reveal later ones, so we don't gate on a
+    # text signature — any >max_pages scanned doc is fully OCR'd, bounded by hard_cap.
+    hard_cap = 40
+    n = min(len(doc), max(max_pages, hard_cap))
+    out = [_page_text(i) for i in range(n)]
     doc.close()
     sys.stdout.write("\n".join(out))
 

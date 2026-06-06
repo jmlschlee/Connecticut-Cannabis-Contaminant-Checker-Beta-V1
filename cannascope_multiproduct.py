@@ -295,11 +295,15 @@ def isolate_product(text=None, pages: Optional[List[str]] = None,
     doc = analyze_document(text=text, pages=pages)
     products = doc["products"]
 
-    if not products:
-        return (None, 0.0, "no product blocks recognized")
-    if doc["n_products"] == 1:
-        # Single product (possibly multi-panel) — return the whole thing.
-        return (products[0]["text"], 1.0, "single-product document")
+    # 0 or 1 resolvable product blocks => nothing to split; parse the WHOLE document. This is the
+    # common case (an ordinary single-product COA), and it must NOT be suppressed even if a weak
+    # multi-product signal fired (e.g. a COA that merely mentions 2 registration numbers): suppressing
+    # a legitimate single-product COA would drop real findings.
+    if doc["n_products"] <= 1:
+        if products:
+            return (products[0]["text"], 1.0, "single-product document")
+        whole = text if text is not None else "\n".join(pages or [])
+        return (whole, 1.0, "single-product document")
 
     # --- multi-product: must pin the registry record to exactly one block ---
     tgt_id = lab_id(target_lab_id) if target_lab_id else ""
