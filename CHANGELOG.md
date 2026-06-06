@@ -2,7 +2,34 @@
 
 All notable changes to this project are documented here.
 
-## [16.1.1] — 2026-06-05 — CannaScope CT V16.1.1 — current release
+## [16.2.0] — 2026-06-05 — CannaScope CT V16.2.0 — current release
+
+Non-destructive transparency & readability refinement pass. No detection logic changed; no findings
+removed; `ANALYSIS_VERSION` stays 15.1.0. All prior releases remain live.
+
+### Changed
+- **Multiple/conflicting COA records reframed for comparison** (kept in full, not discarded): each case
+  now shows COA number, batch/lot, date, lab, result, pass/fail, limit + an explicit "Compare:" line
+  (COA refs / dates / pass-fail / values identical-or-different). "Duplicate COA" → "Multiple records".
+- **RPD disambiguated**: shows both percent increase (low→high) and Relative Percent Difference (RPD).
+- **Softer causal wording** for large ratios (parser / formatting / retest / remediation / sample
+  variation — manual review recommended), not "likely a parsing artifact".
+- **Confidence metrics** renamed `*_this_run` + section clarifies they count only COAs freshly read this
+  run (cached COAs format-checked when first read).
+- `coa_years_observed` → `coa_years_fingerprinted_this_run`; added `years_in_report_window`.
+- **Readiness section** explains why a high Conf % year can still be PARTIAL/NOT READY.
+- Reduced repeated explanatory text under each conflict finding.
+
+### Added
+- **"Parser / Coverage Issues" box near the summary** (broken links, unreadable COAs, held potency
+  conflicts, held uncertain extractions) — framed as report limitations, not findings.
+- **Plain-English "What it means" column** in the Data Quality & Debug Log.
+
+### Unchanged / preserved
+Thresholds, triple-verified dataset, year-by-year regulatory ledger + source-document provenance,
+source-binding, conflicting-COA detection logic, per-run folders, report numbering. Nothing deleted.
+
+## [16.1.1] — 2026-06-05 — CannaScope CT V16.1.1 
 
 Folder-name fix: the output folder is renamed from the stale "CannaScope CT V15 - Statewide
 Transparency Reports" to "CannaScope CT V16 - …". `OUT_DIR` was never bumped at the V15→V16

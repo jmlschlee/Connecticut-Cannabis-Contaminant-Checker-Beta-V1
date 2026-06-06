@@ -74,11 +74,11 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V16.1.1"
+APP_NAME = "CannaScope CT V16.2.0"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "16.1.1"
+SOFTWARE_VERSION = "16.2.0"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
 # Single source of truth for the actual shipped single-file name (major version only), used in EVERY
 # rendered/printed recommendation and disclaimer so the report never names a stale script (P4 fix).
@@ -3549,7 +3549,7 @@ def build_pdf(out_path, report_no, ctx):
     if ctx.get("coa_conflicts"):
         _ls = sum(1 for c in ctx["coa_conflicts"] if c.get("relationship") == "Possible lab-shopping indicator")
         _tail = (f" — including {_ls} possible lab-shopping indicator(s)" if _ls else
-                 " — same-lot retests, duplicate COAs, or numeric swings (no cross-lab lab-shopping pattern)")
+                 " — same-lot retests, multiple records for one identifier, or numeric differences (no cross-lab lab-shopping pattern)")
         mif.append(f"<b>{len(ctx['coa_conflicts'])}</b> conflicting-COA review lead(s){_tail}.")
     if ctx.get("thc_flower"):
         mif.append(f"<b>{len(ctx['thc_flower'])}</b> high-cannabinoid flower record(s) for label-accuracy review.")
@@ -3608,6 +3608,37 @@ def build_pdf(out_path, report_no, ctx):
     story.append(KeepTogether([Paragraph("Findings at a Glance", miniH),
                                Paragraph("• " + "<br/>• ".join(glance), SUMM)]))
 
+    # ---- Parser / Coverage Issues (item 6): report LIMITATIONS surfaced near the top — not findings,
+    #      not accusations. Things the program could not fully read/verify, so the reader knows the
+    #      coverage boundaries of this report. ----
+    _d = ctx.get("debug", {}) or {}
+    _sm = ctx.get("src_metrics", {}) or {}
+    _pc = []
+    _bk = _d.get("broken_or_missing_coa_links", 0)
+    _ur = _d.get("unreadable_after_retry", 0)
+    _pp = _d.get("potency_parser_conflicts", 0)
+    _hu = _sm.get("extractions_held_uncertain", 0) or len(ctx.get("format_holds") or [])
+    _vq = ctx.get("n_queue", 0) or _d.get("coa_verification_queue", 0)
+    _mm = _sm.get("coa_source_mismatch_count", 0)
+    if _bk: _pc.append(f"<b>{_bk:,}</b> broken / missing COA link(s) — those products could not be opened or reviewed.")
+    if _ur: _pc.append(f"<b>{_ur:,}</b> COA(s) unreadable even after an escalating-DPI OCR retry — a coverage gap.")
+    if _pp: _pc.append(f"<b>{_pp:,}</b> potency parser conflict(s) — held OUT of findings and routed to review, not published.")
+    if _hu: _pc.append(f"<b>{_hu:,}</b> uncertain extraction(s) held back — excluded from findings until a human verifies them.")
+    if _vq: _pc.append(f"<b>{_vq:,}</b> flagged row(s) in the COA Verification Queue — could not be confirmed against the live COA, so not published.")
+    if _mm: _pc.append(f"<b>{_mm:,}</b> value(s) excluded for a COA source mismatch (the value did not match its linked COA).")
+    _pc_intro = ("<b>Parser / Coverage Issues</b> — these are <b>report limitations, not findings or accusations</b>. "
+                 "They are items the program could not fully read or verify and therefore <b>excluded from findings</b>, "
+                 "shown here so you understand this report's coverage boundaries:")
+    if _pc:
+        story.append(Paragraph(_pc_intro + "<br/>• " + "<br/>• ".join(_pc),
+                               ParagraphStyle("pcbox", parent=CTX, fontSize=9.5, leading=13, alignment=0,
+                                              textColor=colors.HexColor("#5b4a16"), backColor=colors.HexColor("#fbf6e6"),
+                                              borderColor=colors.HexColor("#e4d9a8"), borderWidth=0.6, borderPadding=6,
+                                              spaceBefore=10, spaceAfter=10)))
+    else:
+        story.append(Paragraph("<b>Parser / Coverage Issues:</b> none this run — no broken/unreadable COAs, no held "
+                               "potency conflicts, no uncertain extractions, and no verification-queue exclusions.", CTX))
+
     # ---- How to read these findings (one legend that defines every category). NOT wrapped in
     #      KeepTogether — that was forcing the whole block onto the next page and leaving a gap; it
     #      now flows naturally and fills the page. ----
@@ -3639,17 +3670,19 @@ def build_pdf(out_path, report_no, ctx):
         SEVCOL = {"Critical": "#C0392B", "High": "#E67E22", "Medium": "#9A7B0A", "Low": "#555555"}
         story.append(Spacer(1, 8))
         story.append(HRFlowable(width="100%", thickness=1.4, color=hcol, spaceBefore=2, spaceAfter=6))
-        story.append(Paragraph("CONFLICTING COA RESULTS &amp; POSSIBLE LAB-SHOPPING INDICATORS",
+        story.append(Paragraph("MULTIPLE / CONFLICTING COA RECORDS — REVIEW &amp; COMPARE",
                                ParagraphStyle("cch", parent=H1, fontSize=15, leading=18, textColor=hcol)))
         story.append(Paragraph(
-            "This section looks for the <b>lab-shopping</b> pattern: the same product/lot (matched on a shared "
-            "batch, lot, BioTrack, sample, or product-code identifier) that <b>failed the limit stated on one "
-            "lab's COA — the state standard in effect for that test — and then passed a retest at another lab</b>. "
-            "Pass/fail is judged against the <b>CFU/g limit printed on each COA</b> (Connecticut's standards have "
-            "changed over the years, so each document carries the limit that applied when it was issued) — NOT a "
-            "single fixed limit and NOT any CannaScope internal threshold. Such a record is a <b>possible "
-            "lab-shopping indicator</b> and a potential state-standard concern. Every item <b>requires human "
-            "review</b> and does not, by itself, establish lab-shopping, a violation, or any wrongdoing.", CTX))
+            "This section surfaces every case where the <b>same product/lot identifier</b> (matched on a shared "
+            "batch, lot, BioTrack, sample, or product-code identifier) appears on <b>more than one record or COA "
+            "reference</b> — whether the values, dates, lab, or pass/fail status changed or not. It is included so a "
+            "reviewer can <b>compare the versions</b>: did the COA, the test values, the pass/fail status, the dates, "
+            "or other lab-reported details change between them? Repeated or identical records are kept on purpose (not "
+            "discarded) so nothing is hidden from that comparison. One specific sub-pattern is called out separately: "
+            "the <b>lab-shopping</b> pattern — the same lot that <b>failed the limit on one lab's COA and then passed "
+            "a retest at a different lab</b> (pass/fail judged against the limit printed on each COA, since CT's "
+            "standards changed over the years). Every item <b>requires human review</b> and does not, by itself, "
+            "establish lab-shopping, a violation, or any wrongdoing.", CTX))
         # Shared caveat stated ONCE here, so it isn't repeated on every case below (each case then carries
         # only its own specifics — identifiers, the actual values, and the ratio/difference).
         intro_box(
@@ -3713,11 +3746,16 @@ def build_pdf(out_path, report_no, ctx):
             def _limcell(m):   # the limit STATED ON THAT COA — the standard in effect for that test
                 return (esc(clean_value(m.get("limit"), m.get("unit", "")))
                         if m.get("limit") is not None else "—")
+            _coaid = lambda m: (getattr(m.get("p"), "registration_number", "") or "").strip()
+            ca, cb = _coaid(a), _coaid(b)
             trows = [
                 [Paragraph("<b>Lab</b>", cell), Paragraph(esc(a["lab"]), cell), Paragraph(esc(b["lab"]), cell)],
+                [Paragraph("<b>COA number</b>", cell), Paragraph(esc(ca or "—"), cell_nb), Paragraph(esc(cb or "—"), cell_nb)],
                 [Paragraph("<b>Test date</b>", cell), Paragraph(esc(a["date_str"] or "Unknown"), cell),
                  Paragraph(esc(b["date_str"] or "Unknown"), cell)],
                 [Paragraph("<b>Result</b>", cell), rescell(a), rescell(b)],
+                [Paragraph("<b>Pass / fail</b>", cell),
+                 Paragraph(esc(a.get("status") or "—"), cell), Paragraph(esc(b.get("status") or "—"), cell)],
                 [Paragraph("<b>Limit stated on COA</b>", cell), Paragraph(_limcell(a), cell), Paragraph(_limcell(b), cell)],
                 [Paragraph("<b>Source COA</b>", cell),
                  (coa_cell(a["p"]) if a.get("coa_url") else Paragraph("—", cell)),
@@ -3728,13 +3766,34 @@ def build_pdf(out_path, report_no, ctx):
                               Paragraph(esc(b.get("pages") or "—"), cell)])
             comp = tbl(["", "Result A (earlier)", "Result B (later)"], trows,
                        [1.45*inch, 3.1*inch, 3.1*inch], hc=colors.HexColor(sc), band="#f6f6f6", big=False)
-            extra = []
-            if c["diff"]:
-                extra.append(f'<b>Difference between results:</b> {esc(c["diff"])}.')
+            # Explicit identical/different comparison flags so a reviewer can see at a glance WHAT (if
+            # anything) changed between the two records for this same product identifier.
+            _va, _vb = a.get("value"), b.get("value")
+            same_coa = bool(ca and cb and ca.lower() == cb.lower())
+            same_date = bool(a.get("date_str") and a.get("date_str") == b.get("date_str"))
+            same_status = (a.get("status") or "") == (b.get("status") or "")
+            try:
+                same_val = _va is not None and _vb is not None and float(_va) == float(_vb)
+            except (TypeError, ValueError):
+                same_val = (_va == _vb)
+            cmp_line = ("<b>Compare:</b> COA references " + ("identical" if same_coa else "different")
+                        + f" ({esc(ca or '—')} vs {esc(cb or '—')}); test dates "
+                        + ("identical" if same_date else "different") + "; pass/fail "
+                        + ("unchanged" if same_status else "<b>changed</b>") + "; values "
+                        + ("identical" if same_val else "differ") + ".")
+            # ONE detail line: prefer the interpreted timeline; otherwise the computed difference — never
+            # both (they restated the same numbers). Then ONE concise framing narrative.
+            extra = [cmp_line]
             if c["timeline"]:
-                extra.append(f'<b>Timeline:</b> {esc(c["timeline"])}')
+                extra.append(f'<b>Timeline / difference:</b> {esc(c["timeline"])}')
+            elif c["diff"]:
+                extra.append(f'<b>Difference:</b> {esc(c["diff"])}.')
             av = clean_value(a.get("value"), a.get("unit", "")) if a.get("value") is not None else (a.get("status") or "—")
             bv = clean_value(b.get("value"), b.get("unit", "")) if b.get("value") is not None else (b.get("status") or "—")
+            _MULTI_FRAME = ("Multiple records or COA references were found for the <b>same product identifier</b>. "
+                            "This is <b>not</b> automatically a violation or safety issue — it is included so a "
+                            "reviewer can compare whether the COA, the test values, the pass/fail status, the "
+                            "dates, or other lab-reported details changed between versions.")
             statuses = {a.get("status"), b.get("status")}
             pf_conflict = bool(statuses & {"FAIL", "DETECTED"}) and bool(statuses & {"PASS", "ND"})
             if pf_conflict:
@@ -3759,19 +3818,20 @@ def build_pdf(out_path, report_no, ctx):
                     narr = (lead + "Both results are from the <b>same laboratory</b>, so this is <b>not</b> a lab-shopping "
                             "pattern; it more likely reflects a same-lot retest or a clerical/transcription difference.")
             elif a.get("value") is not None and b.get("value") is not None:
-                # Same pass/fail status with a numeric swing. c['diff']/c['timeline'] now carry the
-                # corrected, bound/unit-guarded math (and flag a likely parser/format artifact when
-                # the ratio is implausibly large for one physical lot).
-                kindword = {"Duplicate COA (same lab, same date)": "a duplicate COA",
-                            "Same-lot retest (same lab, different date)": "a same-lot retest",
-                            "Cross-lab numeric swing": "a cross-lab numeric difference"}.get(rel, "a numeric difference")
-                narr = ("For the same product identifier on the same regulated test, two reports show "
-                        f'different values ({esc(av)} vs {esc(bv)}) — both reported {esc(a.get("status") or "—")}. '
-                        f"This is best read as {kindword}; the size and nature of the difference are summarized above.")
+                # Same pass/fail status, two records for the same identifier. NOT framed as a useless
+                # duplicate — framed as material for a human to compare (item 0). The compare line +
+                # the single detail line above already carry the specifics, so this stays brief (item 7).
+                if same_val and same_coa and same_date:
+                    narr = (_MULTI_FRAME + " Here the compared fields (COA reference, date, value, and "
+                            "pass/fail) appear <b>identical</b> — most likely the same COA referenced more "
+                            "than once; confirm nothing else differs on the source document.")
+                elif same_val:
+                    narr = _MULTI_FRAME + " Here the measured values match; the records differ in COA reference and/or date."
+                else:
+                    narr = _MULTI_FRAME + " Here the measured values differ (see above); pass/fail is unchanged."
             else:
-                # No safety conflict (e.g. multiple lab reports on one lot with no pass/fail clash).
-                narr = ("The same lot identifier appears on more than one report with no pass/fail safety conflict "
-                        "detected. Listed for completeness and human review only.")
+                # Multiple reports on one lot, no pass/fail clash (e.g. one numeric + one pass/fail-only).
+                narr = _MULTI_FRAME + " No pass/fail safety conflict was detected between the records; listed for human comparison."
             # Keep ONLY [head + identifier + comparison table] glued together so the table never
             # orphans from its heading; let the difference/timeline/narrative flow afterward. This
             # lets multiple cases share a page instead of reserving a full page each (the old
@@ -4657,9 +4717,14 @@ def build_pdf(out_path, report_no, ctx):
         "extraction against five independent signals (top-level pass/fail summary; detailed breakdown tables; "
         "numeric values; batch/product/licensee identity; and whether the COA matches the product record). "
         "Extractions with a pass/fail conflict, a product mismatch, impossible numbers, or an unreadable scan "
-        "are marked <b>UNCERTAIN</b> and HELD for review rather than published. This run: "
-        f"<b>{cmix.get('HIGH',0)}</b> HIGH · <b>{cmix.get('MEDIUM',0)}</b> MEDIUM · "
-        f"<b>{cmix.get('LOW',0)}</b> LOW · <b>{cmix.get('UNCERTAIN',0)}</b> UNCERTAIN confidence COAs.", CTX))
+        "are marked <b>UNCERTAIN</b> and HELD for review rather than published.", CTX))
+    _fp_total = sum(cmix.values())
+    story.append(Paragraph(
+        f"<b>Counts below are for the {_fp_total:,} COA(s) that were freshly read and fingerprinted in THIS run</b> "
+        "— not all COAs reviewed. The rest were served from the triple-verified cache (format-checked when first "
+        f"read) and are not re-fingerprinted. Of this run's new reads: <b>{cmix.get('HIGH',0)}</b> HIGH · "
+        f"<b>{cmix.get('MEDIUM',0)}</b> MEDIUM · <b>{cmix.get('LOW',0)}</b> LOW · "
+        f"<b>{cmix.get('UNCERTAIN',0)}</b> UNCERTAIN.", CTX))
     # Unambiguous, mutually-distinct confidence / exclusion metrics (item 6): "detected" counts
     # INPUTS flagged for caution; "published" counts OUTPUTS that reached findings; held/excluded
     # counts never reach findings. Naming kept stable so the appendix can't read as both
@@ -4689,6 +4754,17 @@ def build_pdf(out_path, report_no, ctx):
             "this run: 0.)", note_st))
     fyr = ctx.get("fmt_year_rows") or []
     if fyr:
+        story.append(Paragraph(
+            "<b>Why a year can show a high Conf % but still read PARTIAL or NOT READY.</b> The Conf % is only the "
+            "share of <i>this run's freshly-read</i> COAs that extracted at HIGH/MEDIUM confidence. Readiness is a "
+            "broader maturity signal and needs more than a good percentage: (1) <b>enough verified samples</b> — a "
+            "year with only a handful of newly-read COAs can be 100% confident on those few yet still be PARTIAL "
+            "because the sample is too small to trust the whole year; (2) <b>lab coverage</b> — each lab whose format "
+            "appears that year should be trained, so a year missing a lab's layout stays PARTIAL; (3) <b>parser "
+            "training coverage</b> for that era's COA layout (older AltaSci / columnar Northeast formats); and "
+            "(4) <b>category coverage</b> — the core panels should actually parse that year. So PARTIAL/NOT READY "
+            "means &quot;use with care / train more,&quot; not &quot;the data is wrong&quot; — published values still "
+            "passed every trust check (source-binding, no uncertain findings).", CTX))
         rows = []
         for r in fyr:
             c = r.get("conf", {})
@@ -4742,8 +4818,62 @@ def build_pdf(out_path, report_no, ctx):
                                "as fact.", CTX))
 
     story.append(Paragraph("Data Quality & Debug Log", miniH))
-    rows = [[Paragraph(esc(k), cell), Paragraph(esc(str(v)), cell)] for k, v in ctx["debug"].items()]
-    story.append(tbl(["Metric", "Value"], rows, [4.4*inch, 5.4*inch], big=False))
+    story.append(Paragraph("Raw run metrics, each with a plain-English explanation so a non-programmer can read "
+                           "them. These describe HOW the run went (coverage, OCR, verification) — they are not "
+                           "findings.", CTX))
+    # Plain-English labels for the debug metrics (item 8). Exact keys first; then substring fallbacks so
+    # new/related keys still get a sensible explanation. Unknown keys show a blank explanation, not a guess.
+    _DBG_GLOSS = {
+        "runtime_started": "Clock time the run began.",
+        "elapsed_seconds": "Total wall-clock seconds the run took.",
+        "products_reviewed": "Products in the selected window that were assessed.",
+        "coas_fetched": "COAs retrieved (live or from cache) for review.",
+        "coas_reused_from_ledger": "COAs whose result was reused from the verified-clean ledger (skipped to save time; findings unchanged).",
+        "broken_or_missing_coa_links": "Products whose COA link was missing or didn't open — could not be reviewed (coverage gap).",
+        "unreadable_after_retry": "COAs still unreadable after an escalating-DPI OCR retry (coverage gap).",
+        "ocr_recovered_on_retry": "Image-only COAs successfully read only after an OCR retry.",
+        "ocr_ok": "COAs read via OCR this run (0 on a cache-served run means OCR was not exercised, not that it failed).",
+        "ocr_cache_hits": "Image-only COAs whose OCR text came from the persistent OCR cache (no re-OCR).",
+        "flagged_total": "Total rows that crossed a flag threshold before publication filtering.",
+        "flagged_published": "Flagged rows actually published as findings (after all trust filters).",
+        "coa_verification_queue": "Flagged rows that could not be confirmed against the live COA — excluded from findings.",
+        "high_thc_noninfused_flower": "Non-infused flower over the high-THC review line (label-accuracy review, not a contaminant).",
+        "implausible_flower_potency_excluded": "Flower potency too high to be plausible — excluded as a likely parse/label error.",
+        "potency_parser_conflicts": "Cannabinoid extractions with an internal conflict — held OUT of findings, routed to review.",
+        "self_audit_remaining_issues": "Unresolved self-audit problems this run (target: 0).",
+        "below_detect_results_excluded": "Below-detection (<X) results not published as measurements.",
+        "coa_value_unverified_routed_to_review": "Values that couldn't be re-verified in their own COA — routed to review, not published.",
+        "duplicate_coa_rows": "Identical COA rows collapsed (kept for comparison in the Multiple/Conflicting Records section).",
+        "potential_statute_regulatory_flags": "COA-derived compliance review LEADS (never legal determinations).",
+        "ombudsman_near_limit_products": "Passed products closest to a contaminant limit (patient-safety awareness list).",
+        "conflicting_coa_records": "Same-identifier records surfaced for human comparison (multiple records / retests / swings).",
+        "published_rows_verified_against_linked_coa": "Published values independently re-confirmed in their own linked COA.",
+        "exact_value_link_verification_failures": "Published values that FAILED re-confirmation in their COA (target: 0).",
+        "coa_source_mismatch_count": "Values excluded because they didn't match their linked COA.",
+        "rows_fully_verified": "Published rows that passed every field check (value, product, date, lab, unit, analyte).",
+        "coas_fingerprinted_this_run": "COAs freshly read + format-fingerprinted THIS run (cached COAs aren't re-fingerprinted).",
+        "years_in_report_window": "Distinct test/approval years represented across the reviewed COAs.",
+        "coa_years_fingerprinted_this_run": "Distinct years among only the COAs freshly fingerprinted this run.",
+    }
+    def _dbg_plain(k):
+        if k in _DBG_GLOSS:
+            return _DBG_GLOSS[k]
+        kl = k.lower()
+        if kl.startswith("extraction_confidence"):
+            return "Extraction-confidence tally for COAs freshly read this run (not all COAs)."
+        if kl.startswith("tym_"):
+            return "Yeast & mold (TYM) lab/date-standard review counter."
+        if kl.startswith("compliance_leads"):
+            return "Compliance review leads at this priority tier (leads, not violations)."
+        if "ocr" in kl:
+            return "OCR pipeline counter (image-only COA reading)."
+        if "zero_result" in kl:
+            return "Zero-result coverage counter (historical absence vs parser gap)."
+        return ""
+    rows = [[Paragraph(esc(k), cell_nb), Paragraph(esc(str(v)), cell),
+             Paragraph(esc(_dbg_plain(k)), cell)] for k, v in ctx["debug"].items()]
+    story.append(tbl(["Metric", "Value", "What it means"], rows,
+                     [3.0*inch, 1.4*inch, 5.4*inch], big=False, aligns=["L", "L", "L"]))
 
     # ---- Software Self-Enhancement & Self-Audit (Part B item 9) + persistent log (item 10) ----
     story.append(Paragraph("Software Self-Enhancement &amp; Self-Audit",
@@ -5652,8 +5782,13 @@ def _swing_metrics(a, b):
     hi, lo = max(va, vb), min(va, vb)
     res["comparable"] = True
     res["ratio"] = hi / lo
-    res["pct_diff"] = (hi - lo) / ((va + vb) / 2.0) * 100.0
-    res["large_swing"] = res["ratio"] >= 2.0 and res["pct_diff"] >= 50.0
+    # Two DIFFERENT, clearly-named percentages so the reader is never misled about the math:
+    #   pct_increase = ordinary percent increase from the smaller to the larger value (|a-b|/min*100)
+    #   rpd          = Relative Percent Difference (symmetric, average-based: |a-b|/((a+b)/2)*100)
+    res["pct_increase"] = (hi - lo) / lo * 100.0
+    res["rpd"] = (hi - lo) / ((va + vb) / 2.0) * 100.0
+    res["pct_diff"] = res["rpd"]          # backward-compat alias
+    res["large_swing"] = res["ratio"] >= 2.0 and res["rpd"] >= 50.0
     res["suspect_artifact"] = res["ratio"] >= 50.0
     return res
 
@@ -5676,7 +5811,7 @@ def _relationship(members, kind, fail_then_pass):
     if cross_lab:
         return "Cross-lab numeric swing"
     if len(dates) <= 1:
-        return "Duplicate COA (same lab, same date)"
+        return "Multiple records (same lab, same date)"
     return "Same-lot retest (same lab, different date)"
 
 
@@ -5690,12 +5825,14 @@ def _diff_text(a, b):
     out = f"{clean_value(m['abs_diff'], unit)} absolute difference"
     if not m["comparable"]:
         return out + (f" (ratio not computed — {m['reason']})" if m["reason"] else "")
-    out += f"; ratio {m['ratio']:.1f}:1 (max ÷ min); {m['pct_diff']:.0f}% relative difference"
+    out += (f"; ratio {m['ratio']:.1f}:1 (max ÷ min); +{m['pct_increase']:.0f}% increase (low→high); "
+            f"RPD {m['rpd']:.0f}% (Relative Percent Difference, average-based)")
     if m["suspect_artifact"]:
-        out += (" — ratio implausibly large for one physical lot; likely a parsing/format artifact "
-                "(e.g. a dropped “<” bound or unit error), manual review recommended")
+        out += (" — the ratio is very large for one physical lot; this may reflect a parser issue, a COA "
+                "formatting issue, a retest, remediation, sample variation, or another lab/reporting "
+                "difference. Manual review recommended.")
     elif m["large_swing"]:
-        out += " — large swing"
+        out += " — sizable difference; manual review recommended"
     return out
 
 
@@ -5756,16 +5893,16 @@ def _compare_group(group, watch):
             if sm["comparable"] and sm["large_swing"]:
                 if sm["suspect_artifact"]:
                     out.append(_make_finding(label, members, "Low",
-                        timeline=(f"Numeric swing on the same lot: ratio {sm['ratio']:.1f}:1, "
-                                  f"{sm['pct_diff']:.0f}% relative difference. The ratio is "
-                                  "implausibly large for one physical lot, so this is most likely a "
-                                  "parsing/format artifact (e.g. a dropped “<” bound or unit error) "
-                                  "rather than a true measured swing — manual review only.")))
+                        timeline=(f"Numeric difference on the same lot: ratio {sm['ratio']:.1f}:1, "
+                                  f"+{sm['pct_increase']:.0f}% increase (low→high), RPD {sm['rpd']:.0f}%. "
+                                  "The ratio is very large for one physical lot; this may reflect a parser "
+                                  "issue, a COA formatting issue, a retest, remediation, sample variation, or "
+                                  "another lab/reporting difference — manual review recommended.")))
                 else:
                     out.append(_make_finding(label, members, "Medium",
-                        timeline=(f"Numeric swing on the same lot: ratio {sm['ratio']:.1f}:1, "
-                                  f"{sm['pct_diff']:.0f}% relative difference, with both reports "
-                                  "showing the same pass/fail status (no pass/fail change).")))
+                        timeline=(f"Numeric difference on the same lot: ratio {sm['ratio']:.1f}:1, "
+                                  f"+{sm['pct_increase']:.0f}% increase (low→high), RPD {sm['rpd']:.0f}%, with "
+                                  "both reports showing the same pass/fail status (no pass/fail change).")))
     if not out:
         labs = {cfp.get("test_lab", "") for cfp in group}
         if len([l for l in labs if l]) >= 2:
@@ -7201,12 +7338,25 @@ def main():
                 coa_year_seen.add(prof["year"])
     fmt_learner.save()
     fmt_year_rows = [fmt_learner.year_summary(y) for y in sorted(coa_year_seen)]
-    src_metrics["extraction_confidence_high"] = conf_mix.get("HIGH", 0)
-    src_metrics["extraction_confidence_medium"] = conf_mix.get("MEDIUM", 0)
-    src_metrics["extraction_confidence_low"] = conf_mix.get("LOW", 0)
-    src_metrics["extraction_confidence_uncertain"] = conf_mix.get("UNCERTAIN", 0)
+    # NOTE: conf_mix counts ONLY COAs that were freshly read + fingerprinted THIS run. Cached COAs
+    # (the common case) were format-checked + triple-verified when first read and are not re-fingerprinted,
+    # so these counts are deliberately about this run's NEW reads, not all COAs reviewed. Metric names
+    # say "_this_run" so the small numbers are not misread as "only N of thousands were checked".
+    src_metrics["coas_fingerprinted_this_run"] = sum(conf_mix.values())
+    src_metrics["extraction_confidence_high_this_run"] = conf_mix.get("HIGH", 0)
+    src_metrics["extraction_confidence_medium_this_run"] = conf_mix.get("MEDIUM", 0)
+    src_metrics["extraction_confidence_low_this_run"] = conf_mix.get("LOW", 0)
+    src_metrics["extraction_confidence_uncertain_this_run"] = conf_mix.get("UNCERTAIN", 0)
     src_metrics["extractions_held_uncertain"] = len(format_holds)
-    src_metrics["coa_years_observed"] = len(coa_year_seen)
+    # Years actually represented in this report's window (from every reviewed COA's test/approval date)
+    # — distinct from the years FINGERPRINTED this run (only the freshly-read COAs).
+    _win_years = set()
+    for _p in all_results:
+        _d = v4.parse_date(getattr(_p, "testing_date", "") or getattr(_p, "approval_date", "") or "")
+        if _d and _d[0]:
+            _win_years.add(_d[0])
+    src_metrics["years_in_report_window"] = len(_win_years)
+    src_metrics["coa_years_fingerprinted_this_run"] = len(coa_year_seen)
 
     # per-analyte items (publishable only in ranked sections) — derived from the AUDITED set
     analyte_items = {key: category_rows(pub, key) for key, _t in ANALYTE_TABLES}
