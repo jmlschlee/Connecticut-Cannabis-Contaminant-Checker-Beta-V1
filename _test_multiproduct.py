@@ -88,6 +88,23 @@ check(blk == twomm and conf == 1.0,
 blk, conf, _ = mp.isolate_product(text="random text no products here", target_name="x")
 check(blk is not None and conf == 1.0, "unrecognized text -> whole doc (never a false suppress)")
 
+# ---- columnar OCR repair (2015-era label/value-in-separate-columns) ----
+# microbial table where label and value are on different lines (Apple Vision column read order)
+col = ("Parameter\nTotal Aerobic Microbial Count\nTotal Yeast & Mold Count\nResult Units\n"
+       "2,500,000 per gram\n110,000 per gram\nFAIL\nFAIL\nRecommended Limits *\n100,000\n10,000\n")
+rep = mp.repair_columnar_layout(col)
+check("Total Aerobic Microbial Count 2,500,000 per gram FAIL" in rep, "columnar repair re-pairs aerobic label+value")
+check("Total Yeast & Mold Count 110,000 per gram FAIL" in rep, "columnar repair re-pairs yeast&mold label+value")
+# heavy metals must NOT be repaired (garbled OCR units cause misreads -> safety panel only)
+metals = ("Parameter\nArsenic, Total\nLead, Total\nResult Units\n<0.0005 4g/kg\n<0.002 Mg/kg\nPASS\nPASS\nLimits\n<0.14\n<0.29\n")
+check("[COLUMNAR-REPAIRED ROWS]" not in mp.repair_columnar_layout(metals), "columnar repair SKIPS heavy metals (avoids unit-garble misreads)")
+# mismatched label/value counts -> no rows (conservative, never mis-pairs)
+bad = ("Parameter\nTotal Aerobic Microbial Count\nTotal Yeast & Mold Count\nResult Units\n2,500,000 per gram\nFAIL\n")
+check("[COLUMNAR-REPAIRED ROWS]" not in mp.repair_columnar_layout(bad), "columnar repair emits nothing when counts mismatch")
+# modern COA (no 'Result Units' column header) untouched
+modern2 = "ACME COA\nTotal Yeast & Mold 1200 CFU/g PASS\n"
+check(mp.repair_columnar_layout(modern2) == modern2, "columnar repair is a no-op on modern COAs")
+
 print()
 if _fails:
     print(f"{len(_fails)} FAILED")

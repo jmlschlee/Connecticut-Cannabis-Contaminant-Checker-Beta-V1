@@ -2,7 +2,34 @@
 
 All notable changes to this project are documented here.
 
-## [16.3.5] — 2026-06-05 — CannaScope CT V16.3.5 — current release
+## [16.3.6] — 2026-06-05 — CannaScope CT V16.3.6 — current release
+
+Two-column OCR microbial-table reader + 2015–2021 cache rebuild. `ANALYSIS_VERSION` → 16.3.6;
+`MULTIPRODUCT_CACHE_VERSION` → 2. All prior releases remain live.
+
+### Added
+- `cannascope_multiproduct.repair_columnar_layout`: reconstructs 2015-era columnar OCR tables (label and
+  value in separate columns) by re-pairing label[i]/value[i]/status[i] into same-line rows the parser reads.
+  Scoped to the MICROBIAL / PATHOGEN safety panel only — heavy metals (OCR unit garble → misreads) and
+  cannabinoids (unmapped acid forms → understated THC) are deliberately not reconstructed. Conservative:
+  emits only when value count exactly equals label count; strict no-op on modern COAs. Wired into both the
+  single-product and per-product block parse paths. Regression checks added to _test_multiproduct.py.
+
+### Fixed (data)
+- Re-extracted 2015–2021 (11,775 records) with the repair enabled and re-embedded the corrected
+  COA Data Cache, recovering 2015-era microbial pass/fail values that were previously empty for scanned
+  columnar COAs (supersedes 16.3.5's 2015–2019 refresh).
+
+### Unchanged
+- 16.3.4 multi-product mechanism (per-PDF block cache, ranked identifier matching, isolate-or-suppress,
+  source-audit block binding).
+
+### Known limitation (tracked)
+- Multi-group microbial pages (a second analyte block after the first without its own "Result Units"
+  header) recover only the first group's analytes; in practice the missed ones are passing pathogens, so no
+  FAIL is lost. Heavy-metal/cannabinoid columnar recovery remains out of scope by design.
+
+## [16.3.5] — 2026-06-05 — CannaScope CT V16.3.5 
 
 Data-refresh release: the bundled offline COA cache is rebuilt to remove real multi-product
 cross-attribution. No engine/logic change (`ANALYSIS_VERSION` stays 16.3.4). All prior releases remain live.

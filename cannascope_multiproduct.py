@@ -326,6 +326,124 @@ def _desc_specificity(desc: str) -> Optional[str]:
     return re.sub(r"\s+", "", m.group(1)) if m else None
 
 
+# ---------------------------------------------------------------------------
+# Columnar OCR repair — 2015-era Northeast Labs tables (and similar) put each
+# analyte's label and value in SEPARATE columns, which Apple Vision OCR reads as
+# "all labels, then all values, then all statuses" (label and value on different
+# lines). The row parser then misses them. This re-pairs label[i] with value[i]
+# (and status[i]) and appends same-line rows the existing parser can read.
+# CONSERVATIVE: only emits when the value count EXACTLY matches the label count
+# (mis-alignment could attach the wrong value to an analyte — worse than missing
+# it), and only ADDS rows (never deletes the original text).
+# ---------------------------------------------------------------------------
+_RESULT_UNITS = re.compile(r"^\s*Result\s+Units?\s*$", re.I)
+_PANEL_TITLE = re.compile(
+    r"^\s*(Parameter|HEAVY\s+METALS|CANNABINOIDS|TERPENE|PESTICIDE|RESIDUAL\s+SOLVENT|"
+    r"MICROB|MYCOTOXIN|FOREIGN\s+MATTER|WATER\s+ACTIVITY|MOISTURE|PATHOGEN)", re.I)
+_STATUS_LINE = re.compile(r"^\s*(PASS|FAIL|Not\s+Detected|N/?D)\s*$", re.I)
+_AFTER_BOUNDARY = re.compile(
+    r"^\s*(METHODS|Comments|Approved|Recommended|Limits|LIMITS|Daily\s+Dose|Body\s+Weight|"
+    r"Page\s+\d|Northeast\s+Laborator|\*|RECOMMENDED)", re.I)
+
+
+def _is_value_line(s: str) -> bool:
+    s = (s or "").strip()
+    if not s:
+        return False
+    if re.search(r"\d", s):
+        return True
+    if s[0] in "<—-":
+        return True
+    if re.match(r"(Not\s+Detected|ND)\b", s, re.I):
+        return True
+    return False
+
+
+# Repair is restricted to the MICROBIAL / PATHOGEN safety panel — those labels parse cleanly from a
+# re-paired "label value status" row. Heavy-metal rows misread garbled OCR units (e.g. "<0.0005 4g/kg"
+# -> a spurious "4"), and cannabinoid rows can't map all acid forms (e.g. "THCAr") so they understate
+# total THC. Emitting a WRONG safety/potency value is worse than leaving it for review, so we only
+# reconstruct the microbial/pathogen panel here.
+_MICRO_PATHOGEN_LABEL = re.compile(
+    r"(aerobic|yeast|mold|coliform|bile[\s-]*tolerant|gram[\s-]*negative|"
+    r"e\.?\s*coli|escherichia|salmonella|enterobacter|aspergillus|"
+    r"total\s+plate|pathogen|\bstec\b|shiga)", re.I)
+
+
+def repair_columnar_layout(text: str) -> str:
+    """Re-pair label/value columns in 2015-era columnar OCR tables and append the
+    reconstructed same-line rows so the row parser can read them. Returns the text
+    unchanged if no such table is confidently found."""
+    t = text or ""
+    if "result unit" not in t.lower():        # cheap pre-check (the column header is "Result Units")
+        return t
+    lines = t.split("\n")
+    rows = []
+    for i, ln in enumerate(lines):
+        if not _RESULT_UNITS.match(ln):
+            continue
+        # labels = the contiguous analyte lines immediately ABOVE "Result Units"
+        labels = []
+        j = i - 1
+        while j >= 0:
+            s = lines[j].strip()
+            if not s:
+                j -= 1
+                continue
+            if _PANEL_TITLE.match(s):
+                break
+            if _is_chrome(s) or _is_value_line(s) or _STATUS_LINE.match(s):
+                break
+            labels.append(s)
+            j -= 1
+            if len(labels) > 25:
+                break
+        labels.reverse()
+        if not labels:
+            continue
+        # values = the next lines below "Result Units" that look like values
+        vals = []
+        k = i + 1
+        while k < len(lines) and len(vals) < len(labels):
+            s = lines[k].strip()
+            if not s:
+                k += 1
+                continue
+            if _AFTER_BOUNDARY.match(s) or _STATUS_LINE.match(s):
+                break
+            if _is_value_line(s):
+                vals.append(s)
+                k += 1
+            else:
+                break
+        # CONSERVATIVE GUARD: only pair when counts match exactly
+        if len(vals) != len(labels):
+            continue
+        # optional statuses (PASS/FAIL), exactly one per analyte
+        stats = []
+        while k < len(lines) and len(stats) < len(labels):
+            s = lines[k].strip()
+            if not s:
+                k += 1
+                continue
+            if _STATUS_LINE.match(s):
+                stats.append(s)
+                k += 1
+            else:
+                break
+        use_stats = len(stats) == len(labels)
+        for n, lab in enumerate(labels):
+            if not _MICRO_PATHOGEN_LABEL.search(lab):   # safety panel only (see note above)
+                continue
+            row = f"{lab} {vals[n]}"
+            if use_stats:
+                row += f" {stats[n]}"
+            rows.append(row)
+    if rows:
+        return t + "\n\n[COLUMNAR-REPAIRED ROWS]\n" + "\n".join(rows)
+    return t
+
+
 def _norm_reg(s: str) -> str:
     """Normalize a registration number for comparison (strip spaces/punct, upper)."""
     return re.sub(r"[^a-z0-9]+", "", (s or "").lower())

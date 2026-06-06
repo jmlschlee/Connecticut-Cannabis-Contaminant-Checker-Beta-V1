@@ -78,11 +78,11 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V16.3.5"
+APP_NAME = "CannaScope CT V16.3.6"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "16.3.5"
+SOFTWARE_VERSION = "16.3.6"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
 # Single source of truth for the actual shipped single-file name (major version only), used in EVERY
 # rendered/printed recommendation and disclaimer so the report never names a stale script (P4 fix).
@@ -326,7 +326,7 @@ SELF_IMPROVE_LOG = os.path.join(OUT_DIR, "Self-Improvement Log.json")
 # stamped AND every UNSTAMPED legacy-ledger record then becomes stale and is re-evaluated by the
 # `audit-cache` subcommand. (The existing legacy ledger is entirely unstamped, so all of it is a
 # re-eval candidate — which is exactly the pre-V16 concern: records skipped before newer logic.)
-ANALYSIS_VERSION = "16.3.4"   # BUMP on any detection-logic change (product-type guardrail, potency
+ANALYSIS_VERSION = "16.3.6"   # BUMP on any detection-logic change (product-type guardrail, potency
                               # math, microbial bound handling, limit selection, self-audit categories,
                               # multi-product per-product isolation). The clean-ledger is stamped with
                               # this; entries from an OLDER analysis version are NOT trusted as clean and
@@ -1494,7 +1494,7 @@ _atexit.register(lambda: _ocr_cache_flush(force=True))
 # invalidate every entry after a block-extraction logic change.
 # ============================================================================
 MULTIPRODUCT_PDF_CACHE = os.path.join(OUT_DIR, "Multi-Product COA Cache.json")
-MULTIPRODUCT_CACHE_VERSION = 1
+MULTIPRODUCT_CACHE_VERSION = 2
 _MP_CACHE = None
 _MP_CACHE_LOCK = threading.Lock()
 _MP_CACHE_DIRTY = 0
@@ -1564,11 +1564,15 @@ def _extract_block_record(block, watch):
     """Parse ONE product block's text into a structured per-product record: its identifiers
     PLUS its own measurements (the heavy parse runs once here, then is cached and reused)."""
     bt = block.get("text", "") or ""
+    # Repair 2015-era columnar OCR tables (label/value in separate columns) so the microbial/pathogen
+    # safety panel is extracted. The ORIGINAL block text is still stored (the source audit checks values
+    # against it — the raw value strings are present there too).
+    bt_parse = mp.repair_columnar_layout(bt) if mp is not None else bt
     bp = v5.ProductV5()
-    bp.overall_result = v4.find_overall_result(bt)
-    bp.test_lab = v4.parse_lab(bt)
-    v4.parse_analytes(bt, bp)
-    v5.parse_cannabinoids(bt, bp)
+    bp.overall_result = v4.find_overall_result(bt_parse)
+    bp.test_lab = v4.parse_lab(bt_parse)
+    v4.parse_analytes(bt_parse, bp)
+    v5.parse_cannabinoids(bt_parse, bp)
     return {
         "block_id": block.get("block_id", "") or "",
         "lab_id": block.get("lab_id", "") or "",
@@ -1938,11 +1942,14 @@ def _process_product(p, session, watch):
             _regs = {m.group(0).upper().replace(" ", "") for m in re.finditer(r"MMBR\.?\s?\d{4,}", full_text or "")}
             p._multi_product_coa = (len(_regs) >= 2)
             text = full_text
-    p.overall_result = v4.find_overall_result(text)
-    p.test_lab = v4.parse_lab(text)
-    v4.parse_analytes(text, p)
-    v5.parse_cannabinoids(text, p)
-    v4.apply_flags(p, text, watch)
+    # Repair 2015-era columnar OCR tables so the microbial/pathogen safety panel is read (no-op on modern
+    # COAs). Parse measurements from the repaired text; keep `text` for the other text-derived signals.
+    parse_text = mp.repair_columnar_layout(text) if mp is not None else text
+    p.overall_result = v4.find_overall_result(parse_text)
+    p.test_lab = v4.parse_lab(parse_text)
+    v4.parse_analytes(parse_text, p)
+    v5.parse_cannabinoids(parse_text, p)
+    v4.apply_flags(p, parse_text, watch)
     v5.apply_thc_flags(p)
     p.strain = v5.product_core_name(p)
     p.testing_date = parse_testing_date(text)
