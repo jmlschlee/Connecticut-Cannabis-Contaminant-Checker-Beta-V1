@@ -259,6 +259,18 @@ st.info("**Advisory tool — not medical, legal, or professional advice, and not
         "against the official, live Certificate of Analysis (COA).", icon="ℹ️")
 st.markdown("Each report is generated as a **downloadable PDF** you can save, print, or share.")
 
+# Persistent desktop-download callout — always points at the CURRENT GitHub release (permalink), works on
+# Windows / macOS / Linux. Shown on every load, above both tabs.
+GITHUB_LATEST = "https://github.com/jmlschlee/CannaScope-CT/releases/latest"
+st.markdown(
+    '<div style="background:#eaf3ea;border:1px solid #cfe3cf;border-radius:10px;padding:.7rem .95rem;'
+    'margin:.25rem 0 .7rem;color:#14321f;font-size:.95rem;line-height:1.5;">'
+    '💻 <b>Prefer the desktop app?</b> Free download — runs on <b>🪟 Windows</b>, <b>🍎 macOS</b>, and '
+    '<b>🐧 Linux</b>. &nbsp;'
+    f'<a href="{GITHUB_LATEST}" target="_blank" rel="noopener" '
+    'style="color:#1E7E34;font-weight:700;text-decoration:none;">⬇️ Get the latest release on GitHub →</a>'
+    '</div>', unsafe_allow_html=True)
+
 if not SCRIPT:
     st.error("Setup issue: the CannaScope program file isn't deployed alongside this app.")
     st.stop()
@@ -370,6 +382,10 @@ with tab_state:
         offer_pdf(pdf, run_label) if ok else st.error(msg)
 
 st.divider()
+st.markdown(
+    f'<div class="cs-foot">💻 Desktop app (🪟 Windows · 🍎 macOS · 🐧 Linux): '
+    f'<a href="{GITHUB_LATEST}" target="_blank" rel="noopener" style="color:#1E7E34;font-weight:600;">'
+    'download the latest release on GitHub →</a></div>', unsafe_allow_html=True)
 st.markdown('<div class="cs-foot">Data: Connecticut product registry (data.ct.gov) + each product\'s '
             'linked COA. A value is shown only if it appears in its own linked Certificate of Analysis. '
             'Findings are leads to verify, never conclusions.</div>', unsafe_allow_html=True)
