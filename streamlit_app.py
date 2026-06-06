@@ -12,6 +12,7 @@ import datetime
 import glob
 import io
 import os
+import re
 import subprocess
 import sys
 import time
@@ -26,6 +27,24 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # can run full, fast reports; fall back to the modular source.
 _CANDIDATES = ["CannaScope_CT_V16.py", "cannascope_ct_v16_src.py", "CannaScope_CT_V15.py"]
 SCRIPT = next((c for c in _CANDIDATES if os.path.exists(os.path.join(HERE, c))), None)
+
+
+@st.cache_data(show_spinner=False)
+def app_version():
+    """The REAL program version, read from the shipped code so the UI badge can never drift from the
+    actual build. Prefers the small lean source; falls back to scanning the self-contained."""
+    for cand in ("cannascope_ct_v16_src.py", SCRIPT or ""):
+        p = os.path.join(HERE, cand)
+        if cand and os.path.exists(p):
+            try:
+                with open(p, encoding="utf-8", errors="ignore") as f:
+                    m = re.search(r'SOFTWARE_VERSION\s*=\s*"([^"]+)"', f.read())
+                if m:
+                    return m.group(1)
+            except Exception:
+                pass
+    return ""
+
 
 STATEWIDE_DIR = "CannaScope CT V16 - Statewide Transparency Reports"
 CONSUMER_DIR = os.path.join("output", "consumer_concerns")
@@ -153,7 +172,8 @@ def offer_pdf(pdf, label):
 
 
 # ---------------------------------------------------------------- header
-st.markdown('# 🌿 CannaScope CT <span class="cs-badge">V16.3.6</span>', unsafe_allow_html=True)
+st.markdown(f'# 🌿 CannaScope CT <span class="cs-badge">V{app_version() or "16"}</span>',
+            unsafe_allow_html=True)
 st.caption("Source-verified Connecticut cannabis transparency reports · 33,000+ triple-verified COAs")
 st.info("**Advisory tool — not medical, legal, or professional advice, and not affiliated with the "
         "State of Connecticut.** Every result is a *lead to verify, not a conclusion.* Always confirm "
@@ -238,12 +258,12 @@ with tab_state:
         days = WINDOWS[choice]
         if days is None:
             in_window = len(products) if products else None
-            args_preview = ["statewide", "--since", "2012-01-01", "--csv-cache"]
+            args_preview = ["statewide", "--since", "2012-01-01", "--csv-cache", "--offline"]
         else:
             in_window = (sum(1 for p in products if p["date"]
                              and p["date"] >= datetime.date.today() - datetime.timedelta(days=days))
                          if products else None)
-            args_preview = ["statewide", "--days", str(int(days)), "--csv-cache"]
+            args_preview = ["statewide", "--days", str(int(days)), "--csv-cache", "--offline"]
         run_label = "statewide report"
         if in_window is not None:
             st.metric("Products this report will review", f"{in_window:,}")
