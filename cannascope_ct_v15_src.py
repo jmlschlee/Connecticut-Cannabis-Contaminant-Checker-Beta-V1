@@ -74,11 +74,11 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V16.2.0"
+APP_NAME = "CannaScope CT V16.2.1"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "16.2.0"
+SOFTWARE_VERSION = "16.2.1"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
 # Single source of truth for the actual shipped single-file name (major version only), used in EVERY
 # rendered/printed recommendation and disclaimer so the report never names a stale script (P4 fix).
@@ -4870,10 +4870,16 @@ def build_pdf(out_path, report_no, ctx):
         if "zero_result" in kl:
             return "Zero-result coverage counter (historical absence vs parser gap)."
         return ""
-    rows = [[Paragraph(esc(k), cell_nb), Paragraph(esc(str(v)), cell),
+    def _dbg_val(v):
+        # Cap long values (e.g. validation_warn_reasons is a big list already shown on page 1) so no
+        # single debug cell can grow taller than a page and crash the layout (the all-time run hit a
+        # 940-char value -> a 916pt cell -> LayoutError). Full values stay in debug_log.json/.csv.
+        s = str(v)
+        return s if len(s) <= 220 else s[:217] + "…"
+    rows = [[Paragraph(esc(k), cell_nb), Paragraph(esc(_dbg_val(v)), cell),
              Paragraph(esc(_dbg_plain(k)), cell)] for k, v in ctx["debug"].items()]
     story.append(tbl(["Metric", "Value", "What it means"], rows,
-                     [3.0*inch, 1.4*inch, 5.4*inch], big=False, aligns=["L", "L", "L"]))
+                     [2.7*inch, 2.5*inch, 4.6*inch], big=False, aligns=["L", "L", "L"]))
 
     # ---- Software Self-Enhancement & Self-Audit (Part B item 9) + persistent log (item 10) ----
     story.append(Paragraph("Software Self-Enhancement &amp; Self-Audit",

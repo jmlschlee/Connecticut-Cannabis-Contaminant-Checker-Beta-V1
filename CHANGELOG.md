@@ -2,7 +2,15 @@
 
 All notable changes to this project are documented here.
 
-## [16.2.0] — 2026-06-05 — CannaScope CT V16.2.0 — current release
+## [16.2.1] — 2026-06-05 — CannaScope CT V16.2.1 — current release
+
+Crash fix: the V16.2.0 plain-English debug-log table could raise a ReportLab `LayoutError` on large /
+all-time reports when a long metric value (e.g. `validation_warn_reasons`) wrapped into a cell taller
+than a page. Debug-log cell values are now capped at 220 chars in the table (full values stay in
+debug_log.json/.csv) and the columns rebalanced. Verified on a full all-time run (33,688 products,
+184 pages). No detection logic changed; `ANALYSIS_VERSION` stays 15.1.0.
+
+## [16.2.0] — 2026-06-05 — CannaScope CT V16.2.0 
 
 Non-destructive transparency & readability refinement pass. No detection logic changed; no findings
 removed; `ANALYSIS_VERSION` stays 15.1.0. All prior releases remain live.
