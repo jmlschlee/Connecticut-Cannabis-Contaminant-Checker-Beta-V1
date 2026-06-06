@@ -57,24 +57,86 @@ CACHE_READY = bool(SCRIPT and "V16" in SCRIPT) or os.path.exists(LOCAL_COA_CACHE
 SAMPLE_CAP = 150          # live-mode product cap (only used when CACHE_READY is False)
 MAX_DAYS = 365 if CACHE_READY else 365
 
-# ---------------------------------------------------------------- styling (keep Streamlit's font family
-# everywhere so typography is consistent; only color/weight/spacing are themed)
+# ---------------------------------------------------------------- styling (UI ONLY — colors, fonts,
+# spacing, layout). Pairs with .streamlit/config.toml (pinned light theme). No logic is affected.
 st.markdown("""
 <style>
-html, body, [class*="css"], .stMarkdown, .stButton>button { font-family: "Source Sans Pro", sans-serif; }
-.stApp { background: linear-gradient(180deg,#f6faf6 0%,#ffffff 260px); }
-.block-container { max-width: 760px; padding-top: 1.5rem; }
-h1,h2,h3 { color:#14321f; letter-spacing:-.01em; }
-.cs-badge { background:#1E7E34; color:#fff; font-size:.70rem; font-weight:700; padding:2px 9px;
-  border-radius:999px; position:relative; top:-6px; margin-left:.4rem; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ---- type system: Inter everywhere, comfortable body, strong dark text ---- */
+html, body, [class*="css"], .stMarkdown, .stMarkdown p, .stButton>button, input, textarea,
+label, .stSelectbox, [data-baseweb="select"] * {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important; }
+.stMarkdown, .stMarkdown p, label, .stCaption, p { font-size: 1rem; line-height: 1.55; color:#16271d; }
+
+/* ---- page canvas: centered, comfortable max-width, generous spacing ---- */
+.stApp { background: linear-gradient(180deg,#f4f8f4 0%, #ffffff 320px); }
+.block-container { max-width: 720px; padding-top: 1.6rem; padding-bottom: 3.5rem; }
+
+/* ---- headings / type scale ---- */
+h1 { color:#10311c !important; font-weight:800 !important; font-size:2.15rem !important;
+  letter-spacing:-.025em; line-height:1.15; margin-bottom:.15rem; }
+h2 { color:#14321f !important; font-weight:700 !important; font-size:1.35rem !important; letter-spacing:-.01em; }
+h3 { color:#14321f !important; font-weight:700 !important; font-size:1.12rem !important; }
+.stCaption, [data-testid="stCaptionContainer"] { color:#5d6f5d !important; }
+
+/* ---- version badge: tasteful, not crowding the title ---- */
+.cs-badge { background:#1E7E34; color:#fff !important; font-size:.62rem; font-weight:700;
+  letter-spacing:.02em; padding:3px 9px; border-radius:999px; vertical-align:middle;
+  position:relative; top:-2px; margin-left:.55rem; box-shadow:0 1px 2px rgba(16,49,28,.18); }
+
+/* ---- the two main options: clear, deliberate tabs with an obvious selected state ---- */
+.stTabs [data-baseweb="tab-list"] { gap:.4rem; border-bottom:1px solid #e2eae2; padding-bottom:0; }
+.stTabs [data-baseweb="tab"] { font-size:1.02rem !important; font-weight:600 !important; color:#5d6f5d;
+  padding:.6rem 1.1rem; border-radius:10px 10px 0 0; }
+.stTabs [data-baseweb="tab"]:hover { background:#f1f6f1; color:#14321f; }
+.stTabs [aria-selected="true"] { color:#1E7E34 !important; background:#eaf3ea;
+  border-bottom:3px solid #1E7E34; font-weight:700 !important; }
+.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { background:transparent; }
+
+/* ---- primary + download buttons: the obvious next action ---- */
 .stButton>button[kind="primary"], .stDownloadButton>button {
-  background:#1E7E34; border:0; border-radius:10px; font-weight:700; padding:.55rem 1rem; color:#fff; }
-.stButton>button[kind="primary"]:hover, .stDownloadButton>button:hover { background:#176a2b; color:#fff; }
-.stTabs [data-baseweb="tab"] { font-size:1rem; font-weight:600; }
-div[data-testid="stMetricValue"] { color:#1E7E34; }
-.cs-foot { color:#6b7d6b; font-size:.82rem; }
-.cs-prod { background:#fff; border:1px solid #e6ece6; border-radius:12px; padding:.7rem .9rem;
-  font-size:.92rem; color:#14321f; }
+  background:#1E7E34 !important; border:0 !important; border-radius:10px; font-weight:700;
+  padding:.62rem 1.1rem; color:#fff !important; box-shadow:0 2px 6px rgba(30,126,52,.28);
+  transition:background .15s ease, transform .05s ease; }
+.stButton>button[kind="primary"]:hover, .stDownloadButton>button:hover {
+  background:#176a2b !important; color:#fff !important; }
+.stButton>button[kind="primary"]:active, .stDownloadButton>button:active { transform:translateY(1px); }
+.stButton>button[kind="secondary"] { border:1px solid #cfdccf; border-radius:10px; font-weight:600;
+  color:#14321f; }
+
+/* ---- crisp form fields with readable placeholders + clear focus ---- */
+.stTextInput input, .stSelectbox [data-baseweb="select"] > div {
+  border-radius:9px !important; border:1px solid #cdd8cf !important; background:#fff !important; }
+.stTextInput input:focus, .stSelectbox [data-baseweb="select"] > div:focus-within {
+  border-color:#1E7E34 !important; box-shadow:0 0 0 3px rgba(30,126,52,.15) !important; }
+.stTextInput input::placeholder { color:#7a8a7a !important; opacity:1; }
+.stTextInput label, .stSelectbox label, .stSlider label, .stCheckbox label {
+  font-weight:600 !important; color:#14321f !important; }
+
+/* ---- advisory + alert boxes: readable, grouped ---- */
+[data-testid="stAlert"] { border-radius:10px; }
+[data-testid="stAlert"] p { color:#14321f !important; }
+
+/* ---- "enter identifier manually" expander ---- */
+[data-testid="stExpander"] { border:1px solid #e2eae2 !important; border-radius:10px; background:#fbfdfb; }
+[data-testid="stExpander"] summary, [data-testid="stExpander"] summary p { font-weight:600; color:#14321f !important; }
+
+/* ---- metric (product count) ---- */
+div[data-testid="stMetricValue"] { color:#1E7E34 !important; font-weight:800; }
+div[data-testid="stMetricLabel"] p { color:#5d6f5d !important; font-weight:600; }
+
+/* ---- product result card + footer ---- */
+.cs-prod { background:#fff; border:1px solid #e2eae2; border-radius:12px; padding:.85rem 1rem;
+  font-size:.95rem; color:#14321f; box-shadow:0 1px 3px rgba(16,49,28,.05); }
+.cs-foot { color:#6b7d6b; font-size:.82rem; line-height:1.5; }
+
+/* ---- graceful on mobile ---- */
+@media (max-width: 640px) {
+  .block-container { padding-left:1rem; padding-right:1rem; }
+  h1 { font-size:1.7rem !important; }
+  .stTabs [data-baseweb="tab"] { padding:.5rem .7rem; font-size:.95rem !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 

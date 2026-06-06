@@ -1,0 +1,14 @@
+# Pinned LIGHT theme. Without this file the app inherited the VIEWER's dark/light mode, so in dark mode
+# Streamlit colored text near-white while the app forces a light background -> white-on-white (the
+# contrast bug). Pinning a light base with explicit DARK text makes contrast deterministic and readable
+# (WCAG-AA: #16271d on #ffffff is ~14:1). UI-only; no effect on report generation.
+[theme]
+base = "light"
+primaryColor = "#1E7E34"             # CannaScope green — primary buttons / accents
+backgroundColor = "#ffffff"          # page background
+secondaryBackgroundColor = "#eef4ee" # inputs, expanders, tab strip
+textColor = "#16271d"                # dark, high-contrast body text
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
