@@ -29,7 +29,7 @@ check("parse_date US + time", v4.parse_date("03/14/2025 12:00:00 AM") == (2025, 
 check("parse_date garbage -> 0", v4.parse_date("nope") == (0, 0, 0))
 
 # ---- P1 count invariant logic: flagged <= parsed <= reported_on <= window ----
-src = _load("cannascope_ct_v15_src", os.path.join(HERE, "cannascope_ct_v15_src.py"))
+src = _load("cannascope_ct_v16_src", os.path.join(HERE, "cannascope_ct_v16_src.py"))
 
 class _P:  # minimal product stub
     def __init__(self, analytes=None, cannabinoids=None, pesticides="", solvents=""):

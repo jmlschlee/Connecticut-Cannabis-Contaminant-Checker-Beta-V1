@@ -41,7 +41,7 @@ REG_LEDGER_PATH = os.path.join(_RD, 'CT Regulatory Ledger.json')
 REG_LEDGER = bin_blob(REG_LEDGER_PATH) if os.path.exists(REG_LEDGER_PATH) else ''
 print(f"  embedded reg ledger: {(os.path.getsize(REG_LEDGER_PATH) if os.path.exists(REG_LEDGER_PATH) else 0):,}B raw -> {len(REG_LEDGER):,}B b64")
 
-v9 = open('cannascope_ct_v15_src.py', encoding='utf-8').read()
+v9 = open('cannascope_ct_v16_src.py', encoding='utf-8').read()
 body = v9[v9.index('import argparse'):]
 OLD = '_OCR_WORKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cannascope_ocr_worker.py")'
 assert OLD in body

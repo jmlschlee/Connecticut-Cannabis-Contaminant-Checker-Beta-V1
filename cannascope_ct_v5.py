@@ -88,6 +88,10 @@ FRAMING = ("Every flag is a lead, not a conclusion. Verify every product against
 
 DEFAULT_DAYS = 365                 # 365-day review window (title)
 THC_REVIEW_PCT = 35.0              # flower cannabinoid review threshold (NOT a legal limit)
+FLOWER_PLAUSIBLE_MAX = 45.0        # biological ceiling for DRY FLOWER Total THC. Above this, a
+                                  # "flower"-classified row is almost certainly a concentrate / vape /
+                                  # extract mis-routed as flower -> hold for product-type review, do NOT
+                                  # publish as a high-THC FLOWER finding (item 1).
 
 OUT_DIR = "CannaScope CT Beta V5 - Reports"
 CACHE_DIR = os.path.join(OUT_DIR, "Flagged COA Source PDFs")
@@ -439,22 +443,53 @@ THC_FLAG_FIELDS = ("total_thc", "thc", "d9_thc", "thca",
                    "total_cannabinoids", "total_active")
 
 
+def suspected_nonflower_type(p) -> str:
+    """Best guess at the real product type when a 'flower' row carries concentrate-level potency,
+    from the product name + dosage form. Used to route an implausible-flower row to product-type
+    review (item 1). Returns 'vape' / 'concentrate' / 'extract' / '' (unknown)."""
+    txt = ((p.product_name or "") + " " + (p.dosage_form or "")).lower()
+    if any(k in txt for k in ("vape", "cart", "cartridge", "disposable", "pod", "pen", "510")):
+        return "vape"
+    if any(k in txt for k in ("rosin", "resin", "wax", "shatter", "badder", "budder", "crumble",
+                              "sauce", "diamond", "hash", "kief", "concentrate", "dab")):
+        return "concentrate"
+    if any(k in txt for k in ("extract", "distillate", "rso", "oil", "tincture", "syringe")):
+        return "extract"
+    return ""
+
+
 def apply_thc_flags(p) -> None:
     """Aquamarine review flag: a flower-based product whose Total THC / THC /
     Delta-9 / THCA / Total Cannabinoids / Total Active Cannabinoids exceeds 35%.
     A review signal, never a legal-failure claim."""
     if not is_thc_flower(p):
         return
+    triggers = []
     for key in THC_FLAG_FIELDS:
         e = p.cannabinoids.get(key)
         if not e or e.get("value") is None:
             continue
         v = e["value"]
         if v > THC_REVIEW_PCT:
-            p.thc_flags.append({"field": key, "name": e.get("name", key),
-                                "value": v, "over_by": v - THC_REVIEW_PCT})
-    # keep only the single highest-magnitude trigger as the headline, but retain all
-    p.thc_flags.sort(key=lambda d: d["value"], reverse=True)
+            triggers.append({"field": key, "name": e.get("name", key),
+                             "value": v, "over_by": v - THC_REVIEW_PCT})
+    if not triggers:
+        return
+    triggers.sort(key=lambda d: d["value"], reverse=True)
+    headline = triggers[0]["value"]
+    # ITEM 1 GUARDRAIL: a FLOWER-classified row whose Total THC exceeds the biological flower ceiling
+    # (~45%) is implausible for dry flower — almost certainly a concentrate/vape/extract mis-routed as
+    # flower. Do NOT publish it as a high-THC FLOWER finding; route it to the Product-Type / Potency
+    # Classification Review queue with a reclassification guess. (Conservative: hold, don't assert.)
+    if headline > FLOWER_PLAUSIBLE_MAX:
+        p._potency_typemismatch = {
+            "value": headline, "field": triggers[0]["field"], "name": triggers[0]["name"],
+            "suspected_type": suspected_nonflower_type(p),
+            "reason": (f"Classified as flower but Total THC {headline:g}% exceeds the ~{FLOWER_PLAUSIBLE_MAX:g}% "
+                       "biological ceiling for dry flower — likely a concentrate / vape / extract "
+                       "mis-routed as flower; held for product-type review, not published as high-THC flower.")}
+        return   # NOT a high-THC flower finding
+    p.thc_flags = triggers   # keep all triggers, highest-magnitude first
 
 
 def thc_headline(p):

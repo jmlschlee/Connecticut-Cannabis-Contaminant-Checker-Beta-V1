@@ -2,7 +2,28 @@
 
 All notable changes to this project are documented here.
 
-## [16.2.2] — 2026-06-05 — CannaScope CT V16.2.2 — current release
+## [16.3.0] — 2026-06-05 — CannaScope CT V16.3.0 — current release
+
+Parser & data-routing safety fixes (conservative; route-to-review when uncertain). `ANALYSIS_VERSION`
+15.1.0 → 16.3.0. All prior releases remain live.
+
+### Fixed / Added
+- Flower-classified rows with Total THC >45% held for Product-Type / Potency Classification Review (not
+  published as high-THC flower); section C wired to the real queue.
+- Total THC > Total Cannabinoids → potency-parser-conflict queue (with a ratio guard so mis-parsed small
+  Total-Cannabinoids values don't suppress legitimate findings).
+- Broad "< X CFU/g" microbial bounds above 10,000 → "consumer-risk UNDETERMINED (bound too broad)", not a clean low pass.
+- Yeast & mold pass/fail now uses the COA's own printed limit (date/lab-aware), like aerobic; 10k watch line kept separate.
+- Self-audit gate now warns on conflicting-COA records, product-type holds, THC>Total-Cannabinoids, broad-bound microbials.
+- Clean-ledger version-stamped (ANALYSIS_VERSION) so legacy-clean records re-evaluate under new rules.
+
+### Changed
+- Modular source renamed cannascope_ct_v15_src.py → cannascope_ct_v16_src.py (engines v4/v5 unchanged). Version → 16.3.0.
+
+### Not in this release
+- Historical OCR / lab-layout template fallback (needs the specific failing COAs to build safely; tracked).
+
+## [16.2.2] — 2026-06-05 — CannaScope CT V16.2.2 
 
 Reprioritizes the Multiple/Conflicting COA Records section to lead with cases where the reported
 analytical RESULT changed between COAs, ending with metadata-only differences. No detection logic

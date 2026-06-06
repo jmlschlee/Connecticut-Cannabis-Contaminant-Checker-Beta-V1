@@ -24,7 +24,7 @@ st.set_page_config(page_title="CannaScope CT", page_icon="🌿", layout="centere
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Prefer the self-contained V16 (it embeds the triple-verified cache + auto-seeds it) so the web app
 # can run full, fast reports; fall back to the modular source.
-_CANDIDATES = ["CannaScope_CT_V16.py", "cannascope_ct_v15_src.py", "CannaScope_CT_V15.py"]
+_CANDIDATES = ["CannaScope_CT_V16.py", "cannascope_ct_v16_src.py", "CannaScope_CT_V15.py"]
 SCRIPT = next((c for c in _CANDIDATES if os.path.exists(os.path.join(HERE, c))), None)
 
 STATEWIDE_DIR = "CannaScope CT V15 - Statewide Transparency Reports"

@@ -1226,17 +1226,24 @@ def apply_flags(p: Product, text: str, watch: int):
         p.flags.append("VERIFY_CONTRADICTION: COA shows a FAIL/exceeds wording while "
                        "batch marked PASS — verify against COA")
 
-    # 5. Yeast & mold -- its OWN scale: > legal 100k = RED; watch..100k = YELLOW.
+    # 5. Yeast & mold -- its OWN scale. The CT REGULATORY pass/fail is judged against the action limit
+    #    PRINTED ON THE COA (the standard in effect on its test date / for its lab), exactly like the
+    #    aerobic path above — falling back to CT_MICRO_LIMIT only when the COA printed none. This keeps
+    #    the flag/severity decision date- & lab-aware (so an AltaSci-era 1,000,000-limit COA is not
+    #    falsely RED, and a pre-2020 10,000-limit COA is correctly RED) and consistent with the dated
+    #    Yeast & Mold Standard Review section. The internal 10,000 CFU/g consumer-awareness watch line
+    #    is kept SEPARATE (YELLOW), never conflated with the regulatory limit.
     tymc = a.get("tymc")
     if tymc and tymc.get("value") is not None and not _is_below_detect(tymc):
         ym = tymc["value"]
-        if ym > CT_MICRO_LIMIT:
+        tlim = tymc.get("limit") or CT_MICRO_LIMIT
+        if ym > tlim:
             p.flags.append(f"OVER_CT_LIMIT: yeast & mold {_amount(tymc)} "
-                           f"> {CT_MICRO_LIMIT:,} CFU/g (CT legal limit)")
+                           f"> {tlim:,.0f} CFU/g (CT legal limit on the COA)")
         elif ym > watch:
             p.flags.append(f"OVER_CANNASCOPE_CT_STANDARD: yeast & mold {_amount(tymc)} "
                            f"> {watch:,} CFU/g CannaScope CT Standard (LEGAL in CT; "
-                           f"Connecticut Legal Limit {CT_MICRO_LIMIT:,})")
+                           f"Connecticut Legal Limit {tlim:,.0f})")
 
     # 6. Remediation signature: low/ND yeast&mold yet a mycotoxin detectable
     myco_hit = any(a.get(k) and a[k].get("value") and a[k]["value"] > 0
