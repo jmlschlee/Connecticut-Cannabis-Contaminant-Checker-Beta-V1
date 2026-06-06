@@ -2,7 +2,28 @@
 
 All notable changes to this project are documented here.
 
-## [16.3.4] — 2026-06-05 — CannaScope CT V16.3.4 — current release
+## [16.3.5] — 2026-06-05 — CannaScope CT V16.3.5 — current release
+
+Data-refresh release: the bundled offline COA cache is rebuilt to remove real multi-product
+cross-attribution. No engine/logic change (`ANALYSIS_VERSION` stays 16.3.4). All prior releases remain live.
+
+### Fixed (data)
+- Re-extracted the 2015–2019 medical-era COAs (6,401 records) with the v16.3.4 multi-product-aware engine
+  and re-embedded the corrected cache. Found 106 era records that are genuinely multi-product COAs NOT
+  sharing a registry URL (e.g. one record whose PDF holds two products) — previously subject to
+  first-product cross-attribution; now isolated to their own block or suppressed → COA Needs Manual Review.
+- Bundled statewide report: published findings 3,041 → 3,038 (2 fewer RED — removed cross-attributed
+  values); source audit re-verified all 1,688 remaining flagged values in their own block/COA; build clean.
+
+### Unchanged
+- Engine/detection logic and the 16.3.4 multi-product mechanism (per-PDF block cache, ranked identifier
+  matching, isolate-or-suppress, source-audit block binding).
+
+### Known limitation (tracked)
+- Two-column OCR microbial tables on isolated one-per-page blocks aren't yet associated (isolate to empty —
+  safe, never a wrong value).
+
+## [16.3.4] — 2026-06-05 — CannaScope CT V16.3.4 
 
 Multi-product COA data integrity: parse once, cache every product block separately, never
 cross-attribute. `ANALYSIS_VERSION` → 16.3.4 (cache-path runs unchanged; only cold/online reads
