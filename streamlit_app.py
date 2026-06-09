@@ -347,21 +347,39 @@ with tab_state:
                               help="Data loads instantly from the embedded dataset. Larger windows just "
                                    "take longer to compile into the PDF.")
         days = WINDOWS[choice]
+        # SUPERIOR RULE — LIVE-FIRST. The cache only makes runs faster; the live COA is the authority. So the
+        # DEFAULT is a live-validated run (re-verify each product against its source COA). "Fast (cached,
+        # unverified)" is an explicit opt-out that replays the cache WITHOUT live verification — and the report
+        # is then labeled UNVALIDATED. Neither path forces --offline (the program refuses a silent offline run
+        # while the network is reachable), so the hosted app can never silently degrade to a cache replay.
+        VAL_MODES = {"🔬 Live-validated (recommended)": "live",
+                     "⚡ Fast (cached, unverified)": "fast"}
+        vmode = st.radio("Validation mode", list(VAL_MODES), index=0,
+                         help="Live-validated re-checks each product against its live COA at the source link "
+                              "before trusting the cache (forensic, slower). Fast replays the cached dataset "
+                              "with no live verification — the report is then labeled UNVALIDATED — CACHE REPLAY.")
+        mode = VAL_MODES[vmode]
+        win = (["--since", "2012-01-01"] if days is None else ["--days", str(int(days))])
+        # live = online, live-first (default); fast = online but cache-first/sampled via --fast-cache.
+        args_preview = ["statewide", *win, "--csv-cache"] + (["--fast-cache"] if mode == "fast" else [])
+        run_label = "statewide report (fast/cached)" if mode == "fast" else "statewide report (live-validated)"
         if days is None:
             in_window = len(products) if products else None
-            args_preview = ["statewide", "--since", "2012-01-01", "--csv-cache", "--offline"]
         else:
             in_window = (sum(1 for p in products if p["date"]
                              and p["date"] >= datetime.date.today() - datetime.timedelta(days=days))
                          if products else None)
-            args_preview = ["statewide", "--days", str(int(days)), "--csv-cache", "--offline"]
-        run_label = "statewide report"
         if in_window is not None:
             st.metric("Products this report will review", f"{in_window:,}")
-            st.success(f"Reviews **all {in_window:,}** products ({choice.lower()}) from the "
-                       "triple-verified COA dataset — no per-product cap — and returns one combined PDF.")
-        st.caption("The data is instant; build time scales with the number of products. The very largest "
-                   "windows can be heavy on the free hosting tier — the desktop download handles any size.")
+            if mode == "live":
+                st.success(f"**Live-validated** — re-verifies all {in_window:,} products ({choice.lower()}) "
+                           "against their live source COAs; the report shows a **Validation Coverage %**.")
+            else:
+                st.warning(f"**Fast / cached** — replays {in_window:,} products ({choice.lower()}) from the "
+                           "cached dataset **without live verification**. The PDF is labeled "
+                           "**UNVALIDATED — CACHE REPLAY**. Use Live-validated for a forensic report.")
+        st.caption("Live-validated re-pulls source COAs, so build time scales with the number of products; the "
+                   "very largest windows are heavy on the free hosting tier — the desktop download handles any size.")
     else:
         days = st.slider("How many days back to review", 7, MAX_DAYS, 90,
                          help="A product is included if it was registered within this many days of today.")

@@ -1868,13 +1868,18 @@ def display_lab_name(lab: str, lab_map=None) -> str:
 
 _BASE_FONT = None
 _BOLD_FONT = None
+# True once a real Unicode TTF (DejaVu/Liberation/Arial/Verdana) is EMBEDDED in the PDF.
+# When False we fell back to the non-embedded base-14 Helvetica, whose glyph coverage depends
+# on the *viewer's* substitute font — some viewers drop the micro sign (U+00B5), turning
+# "µg/kg" into "g/kg". clean_value() reads this to substitute "ug/kg" only in that fallback case.
+_FONT_EMBEDDED = False
 
 
 def _setup_fonts():
     """Use a clean cross-platform sans (DejaVu Sans / Liberation Sans where the
     system has them, e.g. most Linux); otherwise fall back to Helvetica (a PDF
     base font that renders everywhere on macOS/Windows/Linux)."""
-    global _BASE_FONT, _BOLD_FONT
+    global _BASE_FONT, _BOLD_FONT, _FONT_EMBEDDED
     if _BASE_FONT:
         return _BASE_FONT, _BOLD_FONT
     from reportlab.pdfbase import pdfmetrics
@@ -1892,6 +1897,17 @@ def _setup_fonts():
           "/usr/share/fonts/liberation/LiberationSans-Regular.ttf"],
          ["/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
           "/usr/share/fonts/liberation/LiberationSans-Bold.ttf"]),
+        # macOS / Windows: embed Arial (or Verdana), real Unicode TTFs that carry the micro sign
+        # (U+00B5). Embedding the glyph in the PDF is what guarantees "µg/kg" renders in EVERY
+        # viewer, instead of relying on a base-14 Helvetica the viewer substitutes (and may drop µ).
+        ("Arial", "Arial-Bold",
+         ["/System/Library/Fonts/Supplemental/Arial.ttf", "/Library/Fonts/Arial.ttf",
+          "C:/Windows/Fonts/arial.ttf"],
+         ["/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/Library/Fonts/Arial Bold.ttf",
+          "C:/Windows/Fonts/arialbd.ttf"]),
+        ("Verdana", "Verdana-Bold",
+         ["/System/Library/Fonts/Supplemental/Verdana.ttf", "C:/Windows/Fonts/verdana.ttf"],
+         ["/System/Library/Fonts/Supplemental/Verdana Bold.ttf", "C:/Windows/Fonts/verdanab.ttf"]),
     ]
     for fam, _b, reg_paths, bold_paths in candidates:
         rp = next((q for q in reg_paths if os.path.exists(q)), None)
@@ -1903,10 +1919,14 @@ def _setup_fonts():
                 pdfmetrics.registerFontFamily("CCSans", normal="CCSans", bold="CCSans-Bold",
                                               italic="CCSans", boldItalic="CCSans-Bold")
                 _BASE_FONT, _BOLD_FONT = "CCSans", "CCSans-Bold"
+                _FONT_EMBEDDED = True   # a Unicode TTF is embedded — µ and friends render everywhere
                 return _BASE_FONT, _BOLD_FONT
             except Exception:
                 pass
+    # Last resort: base-14 Helvetica is NOT embedded; mark it so unit rendering can avoid the
+    # micro sign (which some viewers drop) by writing "ug/kg" instead of "µg/kg".
     _BASE_FONT, _BOLD_FONT = "Helvetica", "Helvetica-Bold"
+    _FONT_EMBEDDED = False
     return _BASE_FONT, _BOLD_FONT
 
 

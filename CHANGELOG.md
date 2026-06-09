@@ -2,7 +2,41 @@
 
 All notable changes to this project are documented here.
 
-## V17.0.0 — current release
+## V17.1.0 — current release
+
+**NEW — "Convenient Lab Result Groupings by Producer and Lab."** A boundary-clustering statistical
+screen that flags statistically unusual clustering of quantitative results just BELOW a pass/fail
+threshold, by producer / lab / analyte — a review signal, never a fraud claim. Per producer+lab+analyte:
+near-threshold (95–100% of limit) counts, observed vs statewide-expected, observed/expected ratio,
+binomial p-value, z-score, chi-square goodness-of-fit, Fisher exact (small-N), cliff-effect, and a
+0–100 Convenience Score. Pure-Python statistics (no numpy/scipy), validated against known reference
+values (`_test_convenience.py`); minimum-sample rules enforced. Public summary (statewide histogram +
+ranked Top-10 + plain-English interpretation) and a Technical Appendix subsection (full methodology +
+per-producer/lab comparison + per-grouping detail + scatter). New export
+`convenient_lab_result_groupings.csv`.
+
+**Renamed + reframed.** The report is now titled "CT Statewide Cannabis Report." "Potency Parser
+Conflicts" / "Impossible Cannabinoid Math Review" are renamed everywhere to "Laboratory Data
+Consistency Flags" and reframed as data-integrity alerts (a COA's own numbers being internally
+inconsistent), not parser/software errors.
+
+**Honest live-verification coverage.** Cold live reads now count toward validation coverage
+(`products_freshly_read_live`), so a genuine live run no longer reads "0.0% verified"; offline /
+cache-replay runs still correctly read 0% and are tiered UNVALIDATED — CACHE REPLAY. Cache-replay
+detection hardened (no live work of any kind ⇒ cache replay); the disclaimer is run-aware and only
+claims "confirmed this run" when live verification actually ran.
+
+**Accounting + integrity.** Dataset-accounting buckets reconcile fail-loud (reused-from-ledger is
+separate from excluded; analyzed + reused + excluded == in-window). New Coverage Integrity Summary
+(expected / acquired / parsed / live-verified with reconciling ratios, fail-loud on a zero
+denominator). Severity tiers reconcile to the published total; the triple-check no longer rounds
+sub-100% up to "100%"; the three verification counts are labeled by scope and by live-vs-cached source.
+
+**Rendering.** A Unicode TTF (Arial/DejaVu) is embedded so µg/kg renders in every viewer (no more
+"g/kg" drop); the warning-icon tofu glyph removed. No detection logic, threshold, or limit changed in
+this release.
+
+## V17.0.0 
 
 **SUPERIOR RULE — active cache self-audit (cache is a hint, live is the authority).** Every online,
 cache-backed run now stride-samples cached COAs, re-pulls them LIVE from their source links, and compares
