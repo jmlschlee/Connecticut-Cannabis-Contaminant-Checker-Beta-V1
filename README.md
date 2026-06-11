@@ -2,104 +2,103 @@
 
 **Source-verified transparency reports for Connecticut cannabis — built so every number can be traced back to the product's own Certificate of Analysis (COA).**
 
-🔗 **Live web app:** [cannascope-ct.streamlit.app](https://cannascope-ct.streamlit.app) &nbsp;·&nbsp; 💻 **Desktop download:** see [Releases](../../releases) &nbsp;·&nbsp; **Current version: V17.1.1**
+🔗 **Live web app:** [cannascope-ct.streamlit.app](https://cannascope-ct.streamlit.app) &nbsp;·&nbsp; 💻 **Desktop download:** see [Releases](../../releases) &nbsp;·&nbsp; **Current version: V17.2**
 
 ---
 
-## 🆕 What's new in V17.1.1
+## 🆕 What's new in V17.2 — the credibility, completeness & polish release
 
-This release sharpens **honesty** (you can always tell whether a report was actually verified live), adds a **statistical boundary-clustering screen**, and makes the report **much easier to read**.
+This is the biggest upgrade since V17. It makes the report **harder to argue with** (every record is accounted for and the math is checked), **more complete** (over-limit results can no longer hide), and **much nicer to read**.
 
-- 🛰️ **Honest live-verification coverage (gate, not just a counter).** Every report now states, on the cover, how many products were **re-verified against their live source COA this run**. If a run did **zero** live verification (offline, or everything served from cache), the cover is unmistakably stamped **`CACHE-REPLAY — NOT LIVE-VERIFIED THIS RUN`** and no finding is presented as live-verified — incidental OCR can no longer disguise a cache replay as a validated run. *(Earlier builds could show "0% live" while still reading as validated; that's fixed at the root — genuine live reads are now correctly credited.)*
-- ⚡ **`--live-verify` switch.** Forces a fresh re-fetch of **every** COA from its source link this run (plus a full cache self-audit), so a normal online run produces real, non-zero live coverage. The run log states `LIVE VERIFICATION: ON / OFF` in one plain line.
-- 📈 **New section — "Convenient Lab Result Groupings by Producer and Lab."** A statistical screen that flags **statistically unusual clustering of results just *below* a pass/fail limit**, grouped by producer + lab + analyte (primary target: yeast & mold near the limit). Each group gets a binomial p-value, z-score, chi-square goodness-of-fit, Fisher exact (small samples), a cliff-effect check, and a transparent **Convenience Score (0–100)**. It is a **review signal only — never a fraud claim** (boundary clustering can come from legitimate retests, remediation, sampling, rounding, reporting, or selection effects).
-- 🏷️ **Renamed for accuracy.** "Potency Parser Conflicts" / "Impossible Cannabinoid Math" → **"Laboratory Data Consistency Flags"** (data-integrity alerts about a COA's own numbers, **not** software errors). The high-THC section is now **"Biologically Implausible High THC Flower Review."**
-- 📊 **Coverage Integrity Summary** — a standing table of COAs expected / acquired / parsed / live-verified with reconciling ratios (fails loud if a denominator is zero or the buckets don't reconcile).
-- 🧹 **Cleaner, more readable report (Report #-tested):** a **decluttered cover** (status, headline counts, one warning, one pointer — full detail moved to the appendix); **centered, larger** "Most Important Findings," "Statewide Snapshot," and "How To Read" blocks; a **ranked, tier-banded** "Flagged Findings by Producer" table (Highest priority ≥ 20% · Moderate 10–20% · Low < 10%, with the rule printed); pathogen findings sorted **newest → oldest**; and section headers that **never orphan** from their tables.
-- 🔤 **Unicode-clean rendering** — `µg/kg` and other glyphs render correctly in every PDF viewer (an embedded Unicode font; no more "g/kg" drops or missing-glyph boxes).
+### 🛑 A PASS on the cover can no longer hide a failing line inside the COA
+Some lab reports say **"PASS / Below Action Limits" at the top**, yet a result **further down the same document is over its printed limit** (or marked FAIL). Before, CannaScope trusted the top-line PASS and those results were quarantined. **Now every analyte is judged against the limit printed on that same COA** — so an over-limit line **always surfaces** in its contaminant section, flagged **"COA Marked Pass But Contains Over-Limit Result,"** shown as a documented *internal contradiction* (the header says pass, a body line is over). It is never presented as an outside-confirmed failure — the COA's own PASS is shown right next to it.
 
-> No measurement, threshold, limit, or finding was changed in V17.1.x — these are **honesty, presentation, and added-analysis** improvements.
+### ✅ Two honest statuses instead of one confusing banner
+The cover now shows **Report Validation** (how complete the data/parsing is) and **Findings Validation** (were the published numbers each re-verified against their own COA) **side by side**. A coverage gap no longer makes verified findings look "failed," and vice-versa.
 
----
+### 🧾 Every single record is accounted for
+A new **Record Accounting** table places every product in the window into exactly one bucket (reviewed · reused from prior verified runs · excluded out-of-window · date-failure · unknown) and **the totals must add up to the window — the report refuses to publish if they don't.** No more "where did the other records go?"
 
-## ⚖️ Please read first — what this tool is (and isn't)
+### ⚗️ Heavy-metal honesty
+A dedicated **Heavy Metal Coverage** page shows, per metal, how many COAs reported it vs how many actually parsed — and says plainly **"no findings can currently be claimed"** for any metal with zero extraction. The report never implies coverage it doesn't have.
 
-CannaScope CT is an **independent, informational transparency tool**. It reads Connecticut's **public** product registry and each product's **publicly linked** lab Certificate of Analysis (COA), and organizes what those documents say into a readable report.
+### 🌿 Top-100 highest-cannabinoid flower, uncapped
+A new **Top 100 Highest-Cannabinoid Flower** table lists the strongest flower statewide, highest first, with no artificial display cap — biologically implausible values (>45%) are shown and clearly flagged rather than silently dropped.
 
-- ℹ️ **It is not medical, legal, or professional advice**, and it is **not affiliated with, endorsed by, or operated by** the State of Connecticut or any laboratory or producer.
-- 🔎 **Every result is a lead to verify — not a conclusion.** CannaScope does **not** assert that any product is unsafe, adulterated, mislabeled, non-compliant, or fraudulent. A flag means "this is worth checking against the official COA," nothing more.
-- ✅ **A value is shown only if it appears in that product's own linked COA.** Anything that can't be confidently matched to the correct product is **routed to manual review, not published.**
-- 📅 Standards and limits change over time; the report shows the standard it applied and its source. **Always confirm against the official, current COA and the applicable Connecticut rule before relying on anything.**
+### 🧮 "Inaccurate Laboratory Math Detection"
+A clearly-named section surfaces COAs whose **own numbers are internally impossible** — Total THC greater than Total Cannabinoids, a total below the sum of its parts, negatives, or impossible percentages. These are **data-integrity alerts held out of findings** (routed for manual re-read), never treated as a safety finding or an accusation.
 
-If you are making a health, legal, or compliance decision, verify independently with the official documents and a qualified professional.
+### 📈 Stronger, honest statistics
+The boundary-clustering review adds **round-number, digit-preference and nearest-neighbor screens**, and every statistical callout now carries an explicit **significance tier** (interesting · unlikely · statistically significant · highly significant) with the threshold stated. Producer flag rates now show a **95% confidence interval** and mark **low-sample** groups, so a small sample is never read as a firm conclusion.
 
----
+### 🔎 A date and a clickable COA on every product, every time
+Every product listed anywhere in the report now shows its **test date** and a **clickable link to its COA** — every section, every time.
 
-## ✨ What it does — full feature list
+### 💅 Cleaner, full-width, easier to read
+COA links no longer wrap or bleed between columns, tables now **use the full width of the page** (no more cramped columns with wasted space), and the lab-result-change comparisons read as big, obvious **before → after** values.
 
-### 📋 Two ways to use it
-- 🔎 **Look up a product** — search by product or brand name (or enter a batch / COA number / UID) and get a plain-English PDF review of that product and its lab results.
-- 🏛️ **Statewide transparency report** — review every product registered in a date window you choose, as one downloadable PDF.
+### 🎯 Reports are no longer mislabeled "diagnostic"
+A fully-verified recent-year report was previously being branded "DIAGNOSTIC — not ready" because heavy metals are only required on a fraction of products. That readiness logic is fixed: it now judges the panels that are actually tested everywhere, so a clean, fully-verified report reads as a **clean pass with warnings.**
 
-### 🧪 What it reads from each COA
-- 🦠 **Microbials** — total yeast & mold, total aerobic bacteria, and pathogen screens (Salmonella, E. coli, etc.)
-- ⚗️ **Heavy metals** — arsenic, cadmium, lead, mercury, chromium
-- 🌾 **Pesticides** and 🧴 **residual solvents**
-- 🍞 **Mycotoxins** (aflatoxins / ochratoxin)
-- 🌿 **Cannabinoids / potency** — THC, CBD, and totals (Total THC computed from the COA's own components, never an inflated stated figure)
-- ✅ / ❌ **Pass / fail status** as printed on the COA
-
-### 🛡️ How it protects accuracy
-- 🔗 **Source verification** — every published value is re-checked against the product's own linked COA before it appears.
-- 🛰️ **Live-first, live always wins** — the cache is only a speed hint, never trusted blindly. Online runs re-pull the live COA and **correct the cache when they disagree**; runs honestly report how much was verified live this run, and a no-live-verification run is stamped **CACHE-REPLAY — NOT LIVE-VERIFIED**.
-- ⚡ **`--live-verify`** forces a fresh live re-fetch of every COA for a fully live-verified report.
-- 🧬 **Multi-product COA handling** — some COA PDFs contain several products. CannaScope isolates **each product's own block** and will **never** attribute one product's results to another; if it can't be sure, it routes the record to review instead of guessing.
-- 📅 **Date-window integrity** — a statewide report contains **only** records whose COA test date falls inside the requested window; the run shows the exact window applied and **stops rather than publish** anything outside it.
-- 🔬 **Reads 5×, never guesses** — image-only COAs are OCR'd up to **5 escalating attempts**; a value is left "unable to read" only after honest retries — a confidently-wrong safety number is never emitted.
-- 🧯 **Conservative by design** — when extraction is uncertain, the value is **held for manual review**, not published.
-- 🧫 **Below-detection aware** — "less-than" detection limits (e.g. `<10,000 CFU/g`) are treated as bounds, not failing measurements.
-- 🚦 **Fail-loud guarantees** — out-of-window data, an empty report, or a non-reconciling accounting bucket **stop the run** rather than publish something misleading.
-- 🖥️ **Cross-platform** — identical behavior on macOS, Windows, and Linux.
-
-### 📚 Regulatory context & analysis
-- 📜 **Per-year Connecticut standards (2015–2026)** with citations, plus a live re-consult of public CT sources, so each result is judged against the limit that applied at its test date.
-- 🏛️ **Patient-safety / ombudsman review** highlighting near-limit results for medical patients.
-- 🔁 **Conflicting-COA detection** — flags when a product has multiple or differing COAs (e.g. a retest), shown side-by-side for comparison.
-- 📊 **Producer & lab summaries** — honest, comparable rates (a producer's flagged products ÷ that producer's total in the window), now **ranked and tier-banded**.
-- 📈 **Convenient Lab Result Groupings** — the statistical boundary-clustering screen (binomial / z-score / chi-square / Fisher exact / cliff-effect / 0–100 Convenience Score), with a public summary and a full statistical appendix. **Warrants review — never proof of intent.**
-- 🧮 **Laboratory Data Consistency Flags** — surfaces internally inconsistent COA numbers (e.g. Total THC > Total Cannabinoids) as **data-integrity alerts**, held out of findings for manual re-read.
-- 🌿 **Biologically Implausible High THC Flower Review** — non-infused flower with verified Total THC above 35% (implausible for dry flower), a label-accuracy review signal.
-
-### 📦 Outputs, transparency & performance
-- 🧾 **Downloadable PDF** report you can save, print, or share, plus 📑 **CSV exports** for every section and a transparent debug log.
-- 🧰 **Technical Validation & Diagnostics appendix** — Coverage Integrity Summary, validation counters, date-window integrity, source-binding audit, self-audit, parser/OCR diagnostics, and definitions (kept out of the consumer-facing pages).
-- 💾 **Triple-verified COA data cache** — COAs are read once and reused, so reports build quickly and can run **offline** from the bundled dataset (clearly labeled as a cache replay).
-- 🖼️ **OCR** for older scanned / image-only COAs.
-- 🔢 **Provenance & audit trail** — report numbering, source URLs, and a per-value verification stamp.
+> Every flag remains a **lead to verify against the official COA — never a conclusion**, and CannaScope is **not** affiliated with the State of Connecticut, any lab, or any producer.
 
 ---
 
-## 🚀 Getting started
+## 📦 Previously added (V17.1.x — still here)
 
-**Web (easiest):** open [cannascope-ct.streamlit.app](https://cannascope-ct.streamlit.app), pick a mode, choose your window or search a product, and click **Generate the PDF report**.
+- 🛰️ **Honest live-verification gate** — the cover states how many products were re-verified against their live source this run; a 0-live run is unmistakably stamped **`CACHE-REPLAY`**, and `--live-verify` / `--validate` force genuine live re-fetching.
+- 📊 **"Convenient Lab Result Groupings"** — the statistical screen for results clustering just below a pass/fail limit (binomial / z-score / chi-square / Fisher / cliff-effect / 0–100 Convenience Score) — a **review signal only, never a fraud claim.**
+- 🧮 **Laboratory Data Consistency Flags** & **Biologically Implausible High THC Flower Review** (accurate renames), **Coverage Integrity Summary**, decluttered/centered cover blocks, tier-banded producer table, Unicode-clean `µg/kg` rendering.
 
-**Desktop:** download the package for your OS from [Releases](../../releases), unzip, and run the included `run_statewide_report` / `run_consumer_concern_report` script (Python 3.9+; `pip install -r requirements.txt`).
+---
+
+## 📋 What CannaScope CT does
+
+- 🔎 **Look up a product** by name / brand / batch / COA number → a plain-English PDF.
+- 🏛️ **Statewide report** over any date window → one downloadable PDF.
+- 🧪 Reads each COA for 🦠 microbials (yeast & mold, aerobic bacteria, pathogens) · ⚗️ heavy metals · 🌾 pesticides · 🧴 residual solvents · 🍞 mycotoxins · 🌿 cannabinoids/potency · ✅/❌ pass-fail.
+- 🛡️ **Live-first** (the cache is only a speed hint; live wins), **multi-product COA isolation** (never cross-attributes), **date-window integrity**, **below-detection aware**, and **fail-loud** (an empty or non-reconciling report stops; it never ships a silent blank).
+- 📦 Downloadable PDF + CSV exports for every section + a technical appendix.
+
+---
+
+## 🚀 Run it
 
 ```bash
-# Statewide report (live-first; add --live-verify to force a fully live re-verified run)
-python CannaScope_CT_V17.py statewide --since 2024-01-01 --until 2024-12-31
-python CannaScope_CT_V17.py statewide --since 2024-01-01 --until 2024-12-31 --live-verify
+# Statewide (live-first). Add --validate for a full-window, 100% live-verified forensic run.
+python CannaScope_CT_V17.py statewide --since 2024-01-01 --until 2026-06-10
+python CannaScope_CT_V17.py statewide --since 2024-01-01 --until 2026-06-10 --validate
 
 # Single-product consumer report
 python CannaScope_CT_V17.py concern --example
 ```
 
+Each OS zip bundles the self-contained `CannaScope_CT_V17.py` (embeds the triple-verified COA dataset) + README + requirements + LICENSE + install/run scripts. Python 3.9+; `pip install -r requirements.txt`.
+
 ---
 
-## 🗂️ Data sources
-Connecticut public product registry (data.ct.gov) + each product's publicly linked Certificate of Analysis. CannaScope stores and reuses what those public documents say; it does not generate lab results.
+## ⚖️ Important
 
-## 📄 License
-See [LICENSE](LICENSE). Provided **as-is, for informational and transparency purposes only, with no warranty**.
+CannaScope CT is an **independent, informational transparency tool** — **not** medical, legal, or professional advice, and **not** affiliated with or endorsed by the State of Connecticut, any lab, or any producer. **Every flag is a lead to verify against the official COA, not a conclusion.** Provided as-is, no warranty. *All prior releases are preserved; this is an additive release.*
 
-*CannaScope CT surfaces what the public record says so patients, caregivers, and professionals can verify it themselves — quickly, and against the source.* 🌿
+---
+
+<details>
+<summary><b>🔧 Technical changes (V17.2) — for developers / auditors</b></summary>
+
+**Detection / classification (ANALYSIS_VERSION → 17.2.0):**
+- **Over-limit-under-PASS:** `assess_extraction` no longer routes a top-PASS + genuine body over-limit to UNCERTAIN/held; it marks `p._coa_pass_overlimit` and publishes the finding (ambiguous FAIL-status without a verified numeric exceedance still routes to review). New `coa_pass_overlimit_lines(p)` (robust on cache rows), `COA_PASS_OVERLIMIT_FLAG`, debug `coa_pass_with_overlimit_lines`, run-log count, and a "COA Marked Pass — Over-Limit Line Items" section. Surfaces in analyte/contaminant tables + producer/lab aggregation automatically.
+- **Cannabinoid math:** `thc_conflict` now also flags Total Cannabinoids < sum(THCA + Δ9 + total CBD).
+- **Confidence:** `assess_extraction` credits extraction breadth via `_extraction_richness` (promotes, never demotes).
+- **Year-readiness:** `COAFormatLearner._core_coverage`/`_verdict` judge metals coverage relative to where reported (not ÷ all products), so sparsely-tested metals no longer force NOT-READY; arsenic presence regex no longer matches the English word "as".
+
+**Accounting / validation backbone (single source of truth):**
+- `VerificationAccounting` + `build_verification_accounting` (fail-loud reconciliation), `record_accounting_buckets` (record partition, fail-loud Unknown), `consistency_audit` (build-time, `sys.exit(5)` on contradiction), `write_remediation_report` (Final Remediation Report file). All wired before `build_pdf`. Tiers `FINDING_VALIDATION_FAIL` / `DIAGNOSTIC_COVERAGE_INCOMPLETE`; dual Report/Findings status on the cover.
+
+**New analyses / helpers:** `heavy_metal_coverage_rows`, `top_cannabinoid_flower_rows`, `statistical_screens` + `significance_tier`, `_wilson_ci` + `CG_MIN_GROUP_SAMPLE`.
+
+**Presentation:** date + clickable COA on every product table; `coacell` fixed (8pt, `splitLongWords=0`, `wordWrap=None`) so COA links never wrap/bleed; `_fit_widths` scales all tables to ~96% of usable width (stretch-capped, no overflow); big centered before→after in lab-change cases.
+
+**Tests:** `_test_verification_accounting.py`, `_test_presence.py`, `_test_consistency_math.py`, `_test_overlimit.py`, plus S8/S10 assertions in `_test_convenience.py`. Build: `python3 _make_v17.py`. Forensic: `--validate` (needs the certifi CA bundle in restricted shells).
+
+</details>

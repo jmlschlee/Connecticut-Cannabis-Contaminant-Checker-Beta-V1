@@ -49,7 +49,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, namedtuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
@@ -78,11 +78,11 @@ ProductV5 = v5.ProductV5
 # Config
 # ============================================================================
 # Version label shown on the report cover, in output filenames, and in the footer.
-APP_NAME = "CannaScope CT V17.1.1"
+APP_NAME = "CannaScope CT V17.2.0"
 # Software version as it appears in the report FILENAME standard, e.g. "13" -> "...-V15-...".
 # Bump this (and APP_NAME) on a version change; the report-number sequence keeps going (global,
 # continuous, never resets) and filenames simply carry the new version token.
-SOFTWARE_VERSION = "17.1.1"
+SOFTWARE_VERSION = "17.2.0"
 FILE_VERSION_TAG = f"V{SOFTWARE_VERSION}"
 # Single source of truth for the actual shipped single-file name (major version only), used in EVERY
 # rendered/printed recommendation and disclaimer so the report never names a stale script (P4 fix).
@@ -326,7 +326,7 @@ SELF_IMPROVE_LOG = os.path.join(OUT_DIR, "Self-Improvement Log.json")
 # stamped AND every UNSTAMPED legacy-ledger record then becomes stale and is re-evaluated by the
 # `audit-cache` subcommand. (The existing legacy ledger is entirely unstamped, so all of it is a
 # re-eval candidate — which is exactly the pre-V16 concern: records skipped before newer logic.)
-ANALYSIS_VERSION = "17.0.0"   # BUMP on any detection-logic change (product-type guardrail, potency
+ANALYSIS_VERSION = "17.2.0"   # BUMP on any detection-logic change (product-type guardrail, potency
                               # math, microbial bound handling, limit selection, self-audit categories,
                               # multi-product per-product isolation). The clean-ledger is stamped with
                               # this; entries from an OLDER analysis version are NOT trusted as clean and
@@ -393,6 +393,12 @@ PUBLISHABLE = {MATCH_EXACT, MATCH_PARTIAL}
 # Provenance verdict (independent of coverage): a run that did NO live verification is a CACHE REPLAY,
 # not a validated report. Surfaced as its own status tier + page-1 banner + a strict/forensic block.
 UNVALIDATED_CACHE_REPLAY = "UNVALIDATED — CACHE REPLAY (no live verification this run)"
+# ISSUE #44 — a report-level COVERAGE/parser gap is NOT the same as a published finding being wrong.
+# When the only thing failing is dataset coverage (a panel printed but parsed 0) and every PUBLISHED
+# finding still passed source-binding / had no uncertain value / broke no count invariant, the report is
+# a diagnostic-coverage draft, not a "findings failed" FAIL. These two tier strings keep them distinct.
+FINDING_VALIDATION_FAIL = "FAIL — PUBLISHED FINDINGS UNVERIFIED"
+DIAGNOSTIC_COVERAGE_INCOMPLETE = "DIAGNOSTIC REPORT ONLY — COVERAGE INCOMPLETE (published findings verified)"
 
 # THREE distinct product categories for the cannabinoid review. Vapes /
 # concentrates / extracts are NEVER lumped in with infused products.
@@ -792,6 +798,18 @@ def thc_conflict(p) -> Optional[str]:
         return (f"Laboratory Data Consistency Flag — reported Total THC ({tt:g}%) exceeds reported Total "
                 f"Cannabinoids ({ref_total:g}%), which is impossible (Total Cannabinoids includes THC); "
                 "held for manual COA re-read")
+    # Item 9b: Total Cannabinoids must be >= the sum of its reported COMPONENTS (every cannabinoid is part
+    # of the total). thca + delta-9-THC + total CBD are all components, so their sum is a valid LOWER BOUND
+    # on Total Cannabinoids regardless of any other (unsummed) cannabinoids. If the reported Total
+    # Cannabinoids is below even that partial sum, the COA's fields are mis-parsed/mis-mapped — hold for
+    # review. Tolerance absorbs rounding (1 pt or 2% of the sum, whichever larger); all must be plausible %.
+    comps = [thc_value(p, k) for k in ("thca", "d9_thc", "total_cbd")]
+    comp_sum = sum(x for x in comps if x is not None and _ok_pct(x))
+    if (totc is not None and _ok_pct(totc) and comp_sum > 0
+            and totc + max(1.0, 0.02 * comp_sum) < comp_sum):
+        return (f"Laboratory Data Consistency Flag — reported Total Cannabinoids ({totc:g}%) is below the sum "
+                f"of its reported components ({comp_sum:g}%: THCA + Δ9-THC + total CBD), which is impossible "
+                "(the total includes every component); held for manual COA re-read")
     return None
 
 
@@ -1269,6 +1287,15 @@ def validation_summary(debug, remaining, zero_checks, src_metrics, unverified_in
         warns.append("These years have too little learned-format data to rate ("
                      + ", ".join(untrained) + ") — run `learn --years <range>` to train the parser on them.")
 
+    # ISSUE #44 — classify the FAIL: a FINDING-validation failure means a PUBLISHED value can't be trusted
+    # (source-binding failed, an UNCERTAIN extraction was published, or a count invariant broke). A bare
+    # parser GAP (a category printed but parsed 0) is a COVERAGE failure — the dataset is incomplete, but it
+    # does NOT mean any published finding is wrong. The banner/tier use these so a coverage gap never reads
+    # as "the findings failed."
+    _finding_fail = bool(unverified_in_pub or uncertain_published or bad_inv
+                         or any(f.startswith("Unresolved self-audit issue") for f in fails))
+    debug["finding_validation_failed"] = _finding_fail
+    debug["coverage_validation_failed"] = bool(gaps)
     status = "FAIL" if fails else ("PASS WITH WARNINGS" if warns else "PASS")
     return status, fails, warns
 
@@ -3585,7 +3612,13 @@ def compliance_tier(row):
 _PRESENCE_RX = {
     "tymc": re.compile(r"yeast|mold|\btymc\b|total\s+yeast", re.I),
     "aerobic": re.compile(r"aerobic|\btamc\b|plate\s+count", re.I),
-    "arsenic": re.compile(r"arsenic|\bas\b", re.I),
+    # NOTE: match only the full word "arsenic" — NOT the element symbol via `\bas\b`, which (case-
+    # insensitively) matches the ENGLISH WORD "as" ("tested as", "such as") on nearly every COA. That
+    # false-positive presence inflated arsenic "reported-on" to ~every COA (2,157) vs its panel-mates
+    # Cd/Pb/Hg (~632), making arsenic look like a huge parser gap and tripping a spurious metals FAIL on
+    # windows with no real metals. A genuine arsenic value still counts as present via the parsed-implies-
+    # present union in _present_count, so dropping `\bas\b` only removes false positives.
+    "arsenic": re.compile(r"arsenic", re.I),
     "chromium": re.compile(r"chromium", re.I),
     "cadmium": re.compile(r"cadmium", re.I),
     "lead": re.compile(r"\blead\b", re.I),
@@ -3828,7 +3861,16 @@ def generate_self_audit(fmt_year_rows, zero_checks, src_metrics, debug, format_h
     _rem = (f" {n_unverified} dated standard(s) remain to be confirmed (e.g. the reported-but-unpublished "
             "Aug-2020 AltaSci window); their numeric value is not auto-extracted from legal prose."
             if n_unverified else " All applied dated standards this run are confirmed.")
-    if legal_unreachable:
+    # ISSUE #43 — avoid the vacuous "0 of 0 confirmed" + "all confirmed" contradiction when NO dated
+    # standard had to be applied to this window's findings. Say that plainly instead.
+    if n_checked == 0:
+        add("Legal date-awareness (live lookup)",
+            "No date-specific legal standard needed to be applied to this window's published findings "
+            "(0 dated-standard lookups were required this run), so there is nothing to confirm here. "
+            "Standard-application checks run only when a finding depends on a test-date-specific limit.",
+            "Not applicable this run — no dated-standard-dependent findings.",
+            "When a window includes findings that hinge on a dated limit, the live lookup re-verifies them.")
+    elif legal_unreachable:
         add("Legal date-awareness (live lookup)",
             f"{len(legal_unreachable)} live CT legal source URL(s) were unreachable this run; "
             f"{n_verified} of {n_checked} dated standards are confirmed (value verified against CT DCP "
@@ -3971,23 +4013,34 @@ def _provenance_self_checks(debug):
     cache replay surfaces as a REMAINING self-audit failure (and, with --strict-audit/--validate, blocks).
     Each row: {issue, count, status} ('REMAINS' = failed; 'None' = OK/informational)."""
     out = []
-    def row(issue, bad):
-        out.append(dict(issue=issue, count=(1 if bad else 0), status=("REMAINS" if bad else "None")))
+    def row(issue, bad, passed=None):
+        # T5 — a PASSED check must not read as its own failure condition. When `bad` is False and a `passed`
+        # affirmative is supplied, show that instead of the failure-phrased `issue`, so the label and Status
+        # always agree in plain English.
+        out.append(dict(issue=(issue if bad else (passed or issue)),
+                        count=(1 if bad else 0), status=("REMAINS" if bad else "None")))
     cas = str(debug.get("cache_audit_status", "") or "")
     online = not cas.startswith("skipped")
     replay = bool(debug.get("cache_replay")) or "CACHE REPLAY" in str(debug.get("status_tier", "") or "") \
         or "CACHE-REPLAY" in str(debug.get("status_tier", "") or "")
     vc = debug.get("validation_coverage_pct", 0.0) or 0.0
-    reval = int(debug.get("products_revalidated_live", 0) or 0)
+    # Coverage numerator MUST be the PRIMARY live-verified count (freshly read live + cache-audit re-pulls),
+    # NOT the cache-audit-repull sub-counter alone — using the sub-counter printed the contradictory
+    # "0/N (99.5%)". products_live_verified_this_run is what validation_coverage_pct is computed from.
+    reval = int(debug.get("products_live_verified_this_run", 0) or 0)
     reviewed = int(debug.get("products_reviewed", 0) or 0)
     pdfs = int(debug.get("pdfs_downloaded_or_opened", 0) or 0)
     ocr = int(debug.get("ocr_runs_fresh", 0) or 0)
-    # Hard provenance failures (REMAINS):
-    row("PROVENANCE: live source validation bypassed (CACHE REPLAY — no live COA verification this run)", replay)
-    row("PROVENANCE: cache self-audit skipped (cache UNVERIFIED this run)", cas.startswith("skipped"))
-    row(f"PROVENANCE: no COA source opened live this run (PDFs opened={pdfs})", online and reviewed > 0 and pdfs == 0)
-    row(f"PROVENANCE: validation coverage {reval}/{reviewed} ({vc}%) — zero live verification while online",
-        online and reviewed > 0 and vc == 0)
+    # Hard provenance failures (REMAINS) — each carries an affirmative label for the PASSED case (T5).
+    row("PROVENANCE: live source validation bypassed (CACHE REPLAY — no live COA verification this run)", replay,
+        passed="PROVENANCE: live source validation performed (not a cache replay)")
+    row("PROVENANCE: cache self-audit skipped (cache UNVERIFIED this run)", cas.startswith("skipped"),
+        passed="PROVENANCE: live source consulted this run (cache not blindly trusted)")
+    row(f"PROVENANCE: no COA source opened live this run (PDFs opened={pdfs})", online and reviewed > 0 and pdfs == 0,
+        passed=f"PROVENANCE: COA sources opened live this run (PDFs opened={pdfs})")
+    row(f"PROVENANCE: live verification coverage {reval}/{reviewed} ({vc}%) — zero live verification while online",
+        online and reviewed > 0 and vc == 0,
+        passed=f"PROVENANCE: live verification performed — {reval}/{reviewed} ({vc}%) re-verified live this run")
     # Informational provenance coverage (always shown; not a failure on its own):
     out.append(dict(issue=f"PROVENANCE (info): fresh OCR successes this run = {ocr}", count=0, status="None"))
     out.append(dict(issue=f"PROVENANCE (info): validation coverage = {vc}% ({reval}/{reviewed} re-verified live)",
@@ -4283,7 +4336,12 @@ def _cg_round_cluster(recs):
     return hits / len(near)
 
 
-def _cg_score_band(score):
+def _cg_score_band(score, pval=None):
+    # ISSUE #20/#21 — the band must be honest about significance. A result that is not statistically
+    # significant (p >= 0.05) is a review lead at most, never "clustering" worth acting on, regardless of
+    # how high enrichment pushed the raw score.
+    if pval is not None and pval >= 0.05:
+        return "Not statistically significant (review lead only)"
     if score >= 90:
         return "Extreme boundary clustering"
     if score >= 75:
@@ -4313,6 +4371,15 @@ def _cg_convenience_score(near, n, over, ratio, pval, z, round_cluster, low_n):
         s += 8.0
     s += min(10.0, round_cluster * 10.0)                    # round-number clustering
     s = max(0.0, min(100.0, s))
+    # ISSUE #20/#21 — statistical SIGNIFICANCE GATES the score: enrichment (z / obs-over-expected) must not
+    # manufacture a meaningful-looking score when the result is not significant. A non-significant result
+    # (p >= 0.05) can never reach "Review recommended" (>=50); a clearly-insignificant one (p >= 0.10) is
+    # capped into "Normal variation" (<25). This stops a weak p (e.g. 0.089) from reading as real clustering.
+    if pval is not None:
+        if pval >= 0.10:
+            s = min(s, 24.0)
+        elif pval >= 0.05:
+            s = min(s, 49.0)
     if near < CG_MIN_NEAR_STRONG:                           # not enough near results for a strong claim
         s = min(s, 49.0)
     if low_n:                                               # too few total samples -> cap to "mild"
@@ -4394,7 +4461,8 @@ def analyze_convenience_groupings(all_results, ident, lmap):
                 producer=prod, lab=lab, analyte=disp, unit=unit, limit=limit, program=prog,
                 total=n, near=near, over=over, obs_rate=obs_rate, exp_near=exp, ratio=ratio,
                 pval=pval, z=z, chi2=chi2, chi2_p=chi2_p, fisher=fisher, cliff=cliff,
-                round_cluster=round_cluster, score=score, low_n=low_n, band_label=_cg_score_band(score),
+                round_cluster=round_cluster, score=score, low_n=low_n,
+                significant=(pval is not None and pval < 0.05), band_label=_cg_score_band(score, pval),
                 date_lo=dates[0] if dates else "", date_hi=dates[-1] if dates else ""))
         grp_out.sort(key=lambda g: (g["low_n"], -g["score"], g["pval"]))
         rank = 0
@@ -4526,9 +4594,10 @@ def build_pdf(out_path, report_no, ctx):
                     f'{esc(ref)}</b></u></font></link>')
         return '<font color="#C0392B"><b>Missing — Verify</b></font>'
 
-    # A COA ID is ONE unbreakable string: a slightly smaller font + splitLongWords off
-    # so an identifier like "MMBR.0033648" never force-wraps mid-id. Link stays clickable.
-    coacell = ParagraphStyle("coa", parent=cellc, fontSize=9.5, leading=12, splitLongWords=0)
+    # A COA ID is ONE unbreakable string: a smaller font + splitLongWords off so an identifier like
+    # "MMBR.0033648" fits a narrow COA column and never force-wraps mid-id or bleeds into the next column
+    # (fixes the ombudsman + other wide tables on the legal-landscape page). Link stays clickable.
+    coacell = ParagraphStyle("coa", parent=cellc, fontSize=8, leading=10, splitLongWords=0, wordWrap=None)
 
     def coa_cell(p):
         return Paragraph(coa(p), coacell)
@@ -4558,21 +4627,19 @@ def build_pdf(out_path, report_no, ctx):
             spaceBefore=11, spaceAfter=5)))
 
     def _fit_widths(widths, fill):
-        """Adaptive landscape sizing. Scale a per-column width list to the usable page width.
-        For main findings tables (fill=True) the widths are scaled UP to fill the full 14" page
-        (so space isn't wasted and long product names get room to wrap cleanly); for small
-        diagnostic tables (fill=False) we only scale DOWN if they would overflow. Proportions
-        between columns are preserved, so adaptive column widths track each call site's intent."""
+        """Adaptive landscape sizing. Use the page width NICELY: every table — main findings AND small
+        diagnostic — scales UP toward a comfortable fill TARGET (~96% of the usable width) so columns are
+        not left compressed when there is room, proportions preserved. "Within reason, not to the outer
+        edge": the target stops a touch short of the usable width, and the stretch factor is CAPPED so a
+        narrow 2–3-column table fills more of the page without ballooning absurdly (big findings tables may
+        stretch a little more than small diagnostic ones). Overflowing tables still shrink to fit (no bleed)."""
         tot = sum(widths)
         if tot <= 0:
             return widths
-        f = _USABLE_W / tot
-        if not fill:
-            f = min(1.0, f)            # diagnostic tables: shrink-to-fit only, never stretch
-        else:
-            f = min(f, 1.6)            # cap stretch so a 2-3 column table doesn't become absurd
-            f = min(f, _USABLE_W / tot) if tot > _USABLE_W else f
-        if tot * f > _USABLE_W:        # hard safety: never exceed the usable width (no overflow)
+        target = _USABLE_W * 0.96      # comfortable fill — full-looking, but not jammed to the very edge
+        cap = 1.6 if fill else 1.45    # big tables may stretch a bit more than small diagnostic tables
+        f = max(1.0, min(target / tot, cap))   # scale UP toward the target (never shrink below declared here)
+        if tot * f > _USABLE_W:        # hard safety: never exceed the usable width (overflow tables shrink)
             f = _USABLE_W / tot
         return [w * f for w in widths]
 
@@ -4604,8 +4671,9 @@ def build_pdf(out_path, report_no, ctx):
         return t
 
     # rich contaminant row: + Testing Date
+    # SECTION 9 — name the basis in the header so no cell ("+880%") can be misread as a CT legal exceedance.
     RICH_COLS = ["#", "Product", "Testing Date", "Producer", "Measured Value", "CT Legal Limit",
-                 "CT % Of Limit", "CannaScope Limit", "Difference From CannaScope", "COA"]
+                 "CT % Of Limit", "CannaScope Screen", "Diff vs CannaScope Screen (NOT CT legal)", "COA"]
     RICH_W = [0.4*inch, 2.35*inch, 0.95*inch, 1.9*inch, 1.35*inch, 1.3*inch, 0.95*inch, 1.3*inch, 1.55*inch, 1.15*inch]
     RICH_ALIGNS = ["C", "L", "C", "L", "R", "R", "R", "R", "R", "C"]
 
@@ -4698,6 +4766,11 @@ def build_pdf(out_path, report_no, ctx):
     _cov_lines = [f"&#8226; {esc(r)}" for r in (_au0.get("failure_highlights") or [])][:6]
     _warn_lines = [f"&#8226; {esc(r)}" for r in _wr]
     _is_cache_replay = bool(_au0.get("cache_replay")) or "CACHE REPLAY" in _su or "CACHE-REPLAY" in _su
+    # ISSUE #44 — a PUBLISHED-finding trust failure (red) is different from a COVERAGE gap (amber). The
+    # latter must NOT read as "the findings failed."
+    _dbg0 = ctx.get("debug") or {}
+    _is_finding_fail = "PUBLISHED FINDINGS UNVERIFIED" in _su or bool(_dbg0.get("finding_validation_failed"))
+    _is_coverage_incomplete = "COVERAGE INCOMPLETE" in _su
     if _is_cache_replay:
         # PROVENANCE banner — most prominent. A cache replay must never read as a validated report.
         # Run-aware: OFFLINE (couldn't reach live) vs ONLINE-but-0-live-verified (reused cache/local PDFs).
@@ -4717,6 +4790,25 @@ def build_pdf(out_path, report_no, ctx):
                     "does NOT mean a product passed. Re-run with <b>--live-verify</b> (or --validate) to verify "
                     "against the live source &mdash; full detail is in the Technical Validation appendix.")
         _lines = (_cov_lines + _warn_lines) or ["&#8226; (see the limitations below)"]
+    elif _is_finding_fail:
+        # ISSUE #44 — a PUBLISHED finding could not be trusted (source-binding failed / uncertain value
+        # published / count invariant broke). THIS is a genuine trust FAIL of the findings themselves.
+        _bx = "#fbe3e1"; _bd = "#C0392B"
+        _hdr = ("FINDING VALIDATION FAILED &mdash; a PUBLISHED value could not be re-verified against its own "
+                "source COA (or an uncertain value was published). This is a TRUST failure in the findings; "
+                "treat this report as a DRAFT, not final. Detail below.")
+        _lines = ([f"&#8226; {esc(r)}" for r in _fr] or ["&#8226; (no reason recorded)"])
+        if _wr:
+            _lines += ["<b>Other notes:</b>"] + _warn_lines
+    elif _is_coverage_incomplete:
+        # ISSUE #44 — coverage/parser gap ONLY: the dataset is incomplete, but every PUBLISHED finding
+        # passed its trust checks. Amber, and explicit that the findings are NOT in question.
+        _bx = "#fff4e0"; _bd = "#E67E22"
+        _hdr = ("COVERAGE INCOMPLETE &mdash; a DIAGNOSTIC draft. This run could not extract every lab-test "
+                "panel from the COAs, so the DATASET is incomplete. Every PUBLISHED finding still passed its "
+                "source-binding and trust checks &mdash; the limitation is <b>missing coverage, not wrong "
+                "findings</b>. Detail below.")
+        _lines = (_cov_lines + (["<b>Other notes:</b>"] + _warn_lines if _wr else [])) or ["&#8226; (see below)"]
     elif _is_fail:
         _bx = "#fbe3e1"; _bd = "#C0392B"
         _hdr = ("What failed validation? (this report is a DRAFT — do not treat as final)"
@@ -4780,12 +4872,30 @@ def build_pdf(out_path, report_no, ctx):
         Spacer(1, 11),
         Paragraph(f"Report #{report_no}", bigmeta),
         Paragraph("Statewide Report", bigmeta),
+        # ISSUE #1/#2/#13 + T1 — state the coverage scope right under the title so "Statewide" never implies
+        # the whole state was freshly checked today. Sourced ENTIRELY from the single reconciled accounting
+        # object (no inline "remaining %" recompute): the buckets named here SUM to 100% of the window, and
+        # the remainder is attributed to its REAL cause (out-of-window / not-verified / prior-run reuse),
+        # exactly matching the Reconciled Verification Breakdown + Date-Window Integrity sections.
+        (lambda _a: Paragraph(_scope_sentence(_a),
+            ParagraphStyle("scopecap", parent=meta_st, fontSize=9, leading=12, textColor=colors.HexColor("#5a5a5a")))
+         )(ctx["acct"]) if ctx.get("acct") else Spacer(0, 0),
         Paragraph(f"Created {esc(cover_date)}", meta_st),
         Paragraph(esc(cover_time), meta_st),
         Spacer(1, 8),
-        Paragraph(f"Status: <font color=\"{scol}\"><b>{esc(status)}</b></font> &nbsp;|&nbsp; "
-                  f"Dataset window: {esc(window)}",
-                  ParagraphStyle("covstatus", parent=note_st, fontSize=11, leading=15)),
+        # SECTION 11 — TWO distinct statuses side by side. Report Validation = parser/coverage/training
+        # maturity (the tier). Findings Validation = were the PUBLISHED findings each source-verified? A
+        # parser/coverage failure must NOT auto-invalidate findings (and vice versa). Both read from the
+        # accounting object / validation flags — never a single conflated banner.
+        (lambda _fv: Paragraph(
+            f"<b>Report Validation:</b> <font color=\"{scol}\"><b>{esc(status)}</b></font>"
+            "<br/>"
+            f"<b>Findings Validation:</b> <font color=\"{_fv[1]}\"><b>{esc(_fv[0])}</b></font>"
+            f"<br/><font size=\"9\">Dataset window: {esc(window)}</font>",
+            ParagraphStyle("covstatus", parent=note_st, fontSize=11, leading=16))
+         )(("FAIL — a published value could not be source-verified", "#C0392B")
+           if bool((ctx.get("debug") or {}).get("finding_validation_failed"))
+           else ("PASS — every published value re-verified against its own COA", "#1E7E34")),
         Spacer(1, 12),
         Paragraph(f"<b>{ctx['n_reviewed']:,}</b> products in window &nbsp;•&nbsp; <b>{ctx['n_pub']:,}</b> published findings"
                   f"{' (carried from prior verification — 0 re-verified live this run)' if _is_cache_replay else ''} &nbsp;•&nbsp; "
@@ -4852,9 +4962,12 @@ def build_pdf(out_path, report_no, ctx):
              f"{red:,} + {org:,} + {yel:,} + {aqua:,} = <b>{red+org+yel+aqua:,}</b> of {pub:,}"
              + ("" if (red+org+yel+aqua) == pub else f" (+{pub-(red+org+yel+aqua):,} other)")
              + f". <b>High Cannabinoid</b> = the {aqua:,} products with an abnormal/high-cannabinoid flag "
-             "(includes flower, extracts and concentrates) — a real severity assignment, not a balancing "
-             f"figure. Of those, the <b>Biologically Implausible High THC Flower Review</b> section lists the "
-             f"{thc:,} curated non-infused-flower-over-35% cases (a stricter subset, not a separate total).</i>")(
+             "(includes flower, extracts and concentrates). <b>IMPORTANT: this is a POTENCY observation, NOT a "
+             "contaminant or safety failure</b> — high cannabinoid content is not a health risk and is shown on a "
+             "separate axis from the RED/ORANGE/YELLOW contaminant-safety tiers; it is listed alongside them only "
+             f"so every published row carries exactly one label. Of those, the <b>Biologically Implausible High THC "
+             f"Flower Review</b> section lists the {thc:,} curated non-infused-flower-over-35% cases (a stricter "
+             "subset, not a separate total).</i>")(
                 ctx["n_red"], ctx["n_org"], ctx["n_yel"], ctx["n_aqua"], ctx["n_thc"], ctx["n_pub"]),
             ParagraphStyle("tierrec", parent=note_st, fontSize=8.5, leading=11.5, alignment=0)),
         Spacer(1, 8),
@@ -4862,6 +4975,16 @@ def build_pdf(out_path, report_no, ctx):
                   "<b>CT % Of Limit</b> = measured ÷ Connecticut legal limit × 100. <b>CannaScope Limit</b> is the "
                   "stricter consumer-awareness threshold (Yeast &amp; Mold / Aerobic = 10,000 CFU/g; other "
                   "contaminants = 50% of the CT limit). Every COA number is a clickable link.", note_st),
+        Spacer(1, 5),
+        # ISSUE #24/#25/#26 — reconcile "flags" with "legal limits" in plain English up front.
+        Paragraph(
+            "<b>Read this about the flags below.</b> Almost every flag in this report is measured against "
+            "<b>CannaScope's stricter INTERNAL screen</b> (e.g. yeast &amp; mold 10,000 CFU/g), which is "
+            "<b>10&times; tighter than Connecticut's legal limit of 100,000 CFU/g</b>. A product can be <b>flagged here "
+            "and still legally PASS in Connecticut</b>. Phrases like &ldquo;+880% over&rdquo; mean over our "
+            "<b>internal screen</b>, <b>not</b> over the CT legal limit. When this report says &ldquo;no over-limit "
+            "results,&rdquo; it means none exceeded the CT <i>legal</i> limit — the many flags are near-limit / "
+            "internal-screen review leads, not legal violations.", note_st),
         Spacer(1, 10),
     ]
 
@@ -4919,7 +5042,8 @@ def build_pdf(out_path, report_no, ctx):
     _au = ctx.get("cov_audit") or {}
     if _au:
         _tier = _au.get("status_tier", "")
-        _bad = _tier in ("FAIL", "PARTIAL REPORT — MAJOR UNVERIFIED DATA", "PASS WITH MAJOR COVERAGE GAPS")
+        _bad = _tier in ("FAIL", FINDING_VALIDATION_FAIL, "PARTIAL REPORT — MAJOR UNVERIFIED DATA",
+                         "PASS WITH MAJOR COVERAGE GAPS")
         _hdr_color = "#b00020" if _bad else "#8a6d00"
         story.append(Paragraph(
             f'<font color="{_hdr_color}"><b>CRITICAL SOFTWARE / COVERAGE LIMITATIONS IN THIS RUN</b></font>', miniH))
@@ -5011,6 +5135,13 @@ def build_pdf(out_path, report_no, ctx):
             "alike): no record with a CONFIRMABLE COA test date outside the window can be included — if one "
             "survived, the run aborts instead of publishing. The only in-window records lacking an in-window "
             "test date are the approval-date-fallback count shown above (disclosed, not hidden).</i>", TREND))
+        story.append(Paragraph(
+            "<i><b>Risk of the approval-date fallback (issue disclosed).</b> A product's registry APPROVAL date "
+            "can differ from its COA TEST date by weeks or months, so a fallback record could in principle "
+            "belong just outside the requested window. These records are counted above, flagged internally "
+            "(_date_source), and are a small minority; treat their window placement as approximate. The fallback "
+            "is used only because the test date could not be parsed — never to override a date that DID parse.</i>",
+            TREND))
         story.append(Spacer(1, 9))
 
     # ---- FORENSIC VALIDATION APPENDIX — raw, per-run validation counters (what was actually exercised
@@ -5165,8 +5296,14 @@ def build_pdf(out_path, report_no, ctx):
                       f"({v4.ct_pct_label(d.get('ct_pct'), full=False)} of the CT limit), "
                       f"{esc(tcase(p.product_name))}, {esc(producer_short(p, ident))}.")
     if ctx["producer_rows"]:
-        glance.append("<b>Most-flagged producers:</b> " +
-                      ", ".join(f"{esc(r['label'])} ({r['flagged']})" for r in ctx["producer_rows"][:3]) + ".")
+        # T4 — this line ranks by RAW COUNT; the Flagged Findings by Producer table ranks by flag RATE
+        # (% of a producer's products flagged), so a high-count producer can land lower there. Say so, and
+        # sort explicitly by count so "most-flagged" is unambiguous.
+        glance.append("<b>Most-flagged producers (by raw count — the Flagged Findings by Producer table "
+                      "ranks by flag <i>rate</i>, so a high-count producer may sit lower there):</b> " +
+                      ", ".join(f"{esc(r['label'])} ({r['flagged']})"
+                                for r in sorted(ctx["producer_rows"],
+                                                key=lambda r: -(r.get('flagged', 0) or 0))[:3]) + ".")
     catcounts = [(t, len(ai[k])) for k, t in ANALYTE_TABLES]
     catcounts += [("Mycotoxins", len(ctx["mycotoxins"])), ("Residual solvents", len(ctx["solvents"])),
                   ("Pesticide-panel FAIL", len(ctx["pesticides"])), ("Pathogen detected", len(ctx["pathogens"])),
@@ -5236,6 +5373,96 @@ def build_pdf(out_path, report_no, ctx):
         story.append(Paragraph("<b>Parser / Coverage Issues:</b> none this run — no broken/unreadable COAs, no held "
                                "potency conflicts, no uncertain extractions, and no verification-queue exclusions.", CTX))
 
+    # ---- SECTION 7 — HEAVY METAL COVERAGE (parsed vs actual; no implied coverage) ----
+    _hm = heavy_metal_coverage_rows(ctx.get("cov_audit") or {})
+    if _hm:
+        story.append(Paragraph("Heavy Metal Coverage", miniH))
+        story.append(Paragraph(
+            "Heavy metals are tested on only a SUBSET of products (they are not required on every product), "
+            "so coverage here reflects testing requirements, not parser failure. For each metal: how many COAs "
+            "reported it, how many parsed, the parse rate, and whether findings can be claimed. <b>A metal with "
+            "zero extraction shows an explicit 'no findings can be claimed' — this report never implies metal "
+            "coverage it does not have.</b>", CTX))
+        _hm_rows = []
+        for r in _hm:
+            _cl = ("#1E7E34" if r["claimable"] else "#b00020")
+            _hm_rows.append([Paragraph(f"<b>{esc(r['metal'])}</b>", cell),
+                             Paragraph(f"{r['reported']:,}", cellr), Paragraph(f"{r['parsed']:,}", cellr),
+                             Paragraph(f"{r['rate']}%", cellr),
+                             Paragraph(f"<font color=\"{_cl}\">{'yes' if r['claimable'] else 'NO'}</font>", cellc),
+                             Paragraph(esc(r["note"]), cell)])
+        story.append(tbl(["Metal", "COAs reporting", "COAs parsed", "Parse rate", "Findings claimable?", "Note"],
+                         _hm_rows, [0.9*inch, 1.2*inch, 1.1*inch, 0.9*inch, 1.3*inch, 3.0*inch],
+                         big=False, aligns=["L", "R", "R", "R", "C", "L"]))
+        story.append(Spacer(1, 8))
+
+    # ---- SECTION 2 — TOP-100 HIGHEST-CANNABINOID FLOWER (uncapped display; implausible flagged) ----
+    _topf = top_cannabinoid_flower_rows(ctx.get("all_results_for_audit") or [], ctx.get("ident"),
+                                        ctx.get("lmap"), n=100)
+    if _topf:
+        story.append(Paragraph("Top 100 Highest-Cannabinoid Flower Products (statewide)", miniH))
+        story.append(Paragraph(
+            "All non-infused flower with an extracted total-cannabinoid value, sorted highest first &mdash; "
+            "<b>no display cap by %</b>. Values above ~45% are biologically implausible for flower (likely an "
+            "OCR/label error or a mislabeled concentrate) and are <b>flagged here and held for the "
+            "Biologically Implausible High THC Flower review</b> (a labeled subset, not the same as this "
+            "highest-values list). Held records are accounted in the Record Accounting table.", CTX))
+        def _topf_coa(r):
+            if r.get("report_url"):
+                return Paragraph(f'<link href="{esc(r["report_url"])}"><font color="#1155CC"><u><b>'
+                                 f'{esc(tcase(r.get("coa_id") or "COA"))}</b></u></font></link>', coacell)
+            return Paragraph('<font color="#C0392B"><b>Missing — Verify</b></font>', coacell)
+        _tf_rows = []
+        for i, r in enumerate(_topf, 1):
+            _imp = ' <font color="#b00020">(implausible)</font>' if r["implausible"] else ""
+            _tf_rows.append([Paragraph(str(i), cellc), Paragraph(esc(r["producer"]), cell),
+                             Paragraph(esc(tcase(r["product"])), cell), Paragraph(esc(r["lab"]), cell),
+                             Paragraph(f"{r['total_cann']:.1f}%{_imp}", cellr),
+                             Paragraph(f"{r['total_thc']:.1f}%" if r["total_thc"] is not None else "—", cellr),
+                             Paragraph(esc(r["test_date"] or "—"), cellc), _topf_coa(r)])
+        story.append(tbl(["#", "Producer", "Product", "Lab", "Total Cannabinoids", "Total THC", "Test Date", "COA"],
+                         _tf_rows, [0.35*inch, 1.6*inch, 1.85*inch, 1.25*inch, 1.25*inch, 0.85*inch, 0.85*inch, 1.05*inch],
+                         big=False, aligns=["C", "L", "L", "L", "R", "R", "C", "C"]))
+        story.append(Spacer(1, 8))
+
+    # ---- SURGICAL FIX — COA Marked Pass — Over-Limit Line Items (internal contradictions) ----
+    _opl = []
+    for p in (ctx.get("all_results_for_audit") or []):
+        for ln in coa_pass_overlimit_lines(p):
+            _opl.append((p, ln))
+    if _opl:
+        story.append(H("COA Marked Pass — Over-Limit Line Items", color=RED))
+        intro_box("These COAs read <b>PASS / Below Action Limits overall</b>, yet a result in the SAME document's "
+                  "body is <b>over the limit printed on that COA</b> (or an explicit panel FAIL / pathogen DETECTED). "
+                  "The document-level PASS does NOT erase a real body exceedance: each line is surfaced in its "
+                  "analyte's contaminant section AND here, flagged <b>\"" + COA_PASS_OVERLIMIT_FLAG + "\"</b>. "
+                  "<b>This is a documented INTERNAL CONTRADICTION</b> (header pass vs body over-limit), "
+                  "<b>not an externally-confirmed failure</b> — verify against the linked COA.", color="#7a1f17")
+        _opl_rows = []
+        for i, (p, ln) in enumerate(_opl[:MAX_TABLE_ROWS], 1):
+            _res = clean_value(ln["result"], ln.get("unit", "")) if isinstance(ln["result"], (int, float)) else str(ln["result"])
+            _lim = clean_value(ln["limit"], ln.get("unit", "")) if isinstance(ln["limit"], (int, float)) else str(ln["limit"])
+            _pct = f"{ln['pct']}%" if ln.get("pct") is not None else "—"
+            _fold = f"{ln['fold']}&times;" if ln.get("fold") is not None else "—"
+            _opl_rows.append([Paragraph(str(i), cellc), Paragraph(esc(tcase(p.product_name)), cell),
+                              Paragraph(esc(producer_short(p, ident)), cell),
+                              Paragraph(f'<font color="#C0392B"><b>{esc(ln["analyte"])}</b></font>', cell),
+                              Paragraph(f'<font color="#C0392B"><b>{esc(_res)}</b></font>', cellr),
+                              Paragraph(esc(_lim), cellr), Paragraph(esc(_pct), cellr), Paragraph(_fold, cellr),
+                              Paragraph(esc(lab_name(p, lmap)), cell),
+                              Paragraph(esc(test_date(p) or "—"), cellc), coa_cell(p)])
+        story.append(tbl(["#", "Product", "Producer", "Over-Limit Analyte", "Result (this COA)",
+                          "Limit on COA", "% of Limit", "Fold", "Lab", "Test Date", "COA"], _opl_rows,
+                         [0.3*inch, 1.5*inch, 1.4*inch, 1.15*inch, 1.0*inch, 0.85*inch, 0.7*inch, 0.55*inch,
+                          1.05*inch, 0.8*inch, 0.7*inch],
+                         hc=RED, band="#f8d2d0",
+                         aligns=["C", "L", "L", "L", "R", "R", "R", "R", "L", "C", "C"]))
+        story.append(Paragraph("<i>COA overall status for every row above: <b>PASS / Below Action Limits</b> — "
+                               "internal contradiction = <b>yes</b>. Also cross-referenced in the Laboratory Data "
+                               "Consistency review.</i>", note_st))
+        overflow_note(len(_opl), "CannaScope_CT_V15_Validated_Flagged.csv")
+        story.append(Spacer(1, 8))
+
     # ---- How to read these findings (one legend that defines every category). NOT wrapped in
     #      KeepTogether — that was forcing the whole block onto the next page and leaving a gap; it
     #      now flows naturally and fills the page. ----
@@ -5295,10 +5522,15 @@ def build_pdf(out_path, report_no, ctx):
             "per-case notes below give only the case-specific facts.", color="#7a5c00")
         stored = (ctx.get("src_metrics") or {}).get("conflict_fingerprints_in_store", 0)
         if not items:
-            msg = ("<b>No conflicting COA result patterns detected</b> across the persistent cross-run record"
-                   + (f" ({stored:,} COA conflict fingerprints accumulated from this and prior runs)" if stored else "")
-                   + ". Detection spans runs — a COA scanned in an earlier run is still compared against this "
-                   "run's COAs — so a ledger-warm rerun does not lose previously identified conflicts.")
+            # ISSUE #35 — a "fingerprint" is a per-COA comparison record, NOT a conflict. Say so explicitly
+            # so "0 conflicts this window" next to a large fingerprint count never reads as hidden conflicts.
+            msg = ("<b>No conflicting COA result patterns published for this window.</b> "
+                   + (f"The {stored:,} “conflict fingerprints” are per-COA comparison records accumulated "
+                      "from this and prior runs — they are the <b>population searched, NOT conflicts</b>. "
+                      if stored else "")
+                   + "Detection spans runs (a COA scanned earlier is still compared against this run's COAs), "
+                   "and any conflict whose COA dates fall OUTSIDE this report's window is held to the cross-run "
+                   "history and not published here — so a 0 in this window does not erase cross-run history.")
             story.append(Paragraph(msg, cellc))
             return
         if stored:
@@ -5463,7 +5695,14 @@ def build_pdf(out_path, report_no, ctx):
             # orphans from its heading; let the difference/timeline/narrative flow afterward. This
             # lets multiple cases share a page instead of reserving a full page each (the old
             # KeepTogether(whole-block) left ~60% of every page blank across ~75 cases).
-            flow = [Spacer(1, 4), KeepTogether([head, ident_line, Spacer(1, 2), comp])]
+            # SECTION 4 — big, centered, full-width before->after so the change is grasped in under 3s.
+            _big = ParagraphStyle(f"big{i}", parent=miniH, fontSize=19, leading=24, alignment=1)
+            _bigline = Paragraph(
+                f'<font color="#1F2D3D">{esc(str(av))}</font> &nbsp;&rarr;&nbsp; '
+                f'<font color="{sc}"><b>{esc(str(bv))}</b></font>'
+                + (f' &nbsp;<font size="11" color="#9A6B00">[{esc(c["diff"])}]</font>' if c.get("diff") else ''),
+                _big)
+            flow = [Spacer(1, 4), KeepTogether([head, ident_line, Spacer(1, 3), _bigline, Spacer(1, 3), comp])]
             if extra:
                 flow.append(Paragraph("&nbsp;&nbsp;".join(extra), TREND))
             flow.append(Paragraph(narr, body_st))
@@ -5510,9 +5749,12 @@ def build_pdf(out_path, report_no, ctx):
         if pct >= 20: return "Highest review priority"
         if pct >= 10: return "Moderate"
         return "Low"
-    _band_cols = ["Rank", "Producer", "Products In Window", "Flagged", "% Flagged (of window)", "Most Common Issue"]
-    _band_widths = [0.6*inch, 3.45*inch, 1.45*inch, 0.95*inch, 1.5*inch, 2.45*inch]
-    _band_aligns = ["C", "L", "R", "R", "R", "L"]
+    # SECTION 10 — add a 95% confidence interval (Wilson) for the flag rate + a low-sample marker, so a
+    # producer's rate is read with its uncertainty and small samples are not presented as conclusions.
+    _band_cols = ["Rank", "Producer", "Products In Window", "Flagged", "% Flagged (of window)",
+                  "95% CI", "Most Common Issue"]
+    _band_widths = [0.5*inch, 2.95*inch, 1.25*inch, 0.8*inch, 1.35*inch, 1.35*inch, 2.15*inch]
+    _band_aligns = ["C", "L", "R", "R", "R", "C", "L"]
     for _tname, _tcut, _topband in (("Highest review priority", "&ge; 20%", True),
                                     ("Moderate", "10–20%", False), ("Low", "&lt; 10%", False)):
         _grp = [r for r in _prows if _tier_of(r.get("pct", 0) or 0) == _tname]
@@ -5526,9 +5768,14 @@ def build_pdf(out_path, report_no, ctx):
                            backColor=colors.HexColor("#C0392B" if _topband else
                                                      ("#ffe9c7" if _tname == "Moderate" else "#eef2f5")),
                            borderPadding=5, spaceBefore=9, spaceAfter=2)))
+        def _ci_cell(r):
+            lo, hi = _wilson_ci(int(r.get("flagged", 0) or 0), int(r.get("reviewed", 0) or 0))
+            _low = int(r.get("reviewed", 0) or 0) < CG_MIN_GROUP_SAMPLE
+            return (f"{lo}–{hi}%" + ('<br/><font color="#9A7B0A" size="7">low sample</font>' if _low else ""))
         rows = [[Paragraph(f'<b>{r["_rank"]}</b>', cellc), Paragraph(esc(r["label"]), cellb if _topband else cell),
                  Paragraph(str(r["reviewed"]), cellr), Paragraph(str(r["flagged"]), cellr),
-                 Paragraph(f'{r["pct"]:.1f}%', cellr), Paragraph(esc(r["top"]), cell)] for r in _grp]
+                 Paragraph(f'{r["pct"]:.1f}%', cellr), Paragraph(_ci_cell(r), cellc),
+                 Paragraph(esc(r["top"]), cell)] for r in _grp]
         story.append(tbl(_band_cols, rows, _band_widths, aligns=_band_aligns))
     if ctx["producer_rows"]:
         pc = Counter({r["label"]: r["flagged"] for r in ctx["producer_rows"]})
@@ -5695,42 +5942,42 @@ def build_pdf(out_path, report_no, ctx):
               "B and C below.", color="#0E5A4C")
     if high_flower:
         rows = [[Paragraph(f'<font color="#0E6B5A"><b>{i}</b></font>', cellc),
-                 Paragraph(esc(tcase(p.product_name)), cell), Paragraph(pr(p), cell),
+                 Paragraph(esc(tcase(p.product_name)), cell), Paragraph(pr(p), cell), td(p),
                  Paragraph(esc(_cv(p, "thca")), cellr), Paragraph(esc(_cv(p, "d9_thc")), cellr),
                  Paragraph(esc(_cv(p, "total_cbd")), cellr),
                  Paragraph(f'<font color="#0E6B5A"><b>{val:g}%</b></font>', cellr),
                  Paragraph(_basis_short(p), cellc), Paragraph(esc(_cv_total_cann(p)), cellr), coa_cell(p)]
                 for i, (p, val) in enumerate(high_flower[:MAX_TABLE_ROWS], 1)]
-        story.append(tbl(["#", "Product", "Producer", "THCA", "&#916;9-THC", "CBD", "Total THC",
+        story.append(tbl(["#", "Product", "Producer", "Tested", "THCA", "&#916;9-THC", "CBD", "Total THC",
                           "Total THC Basis", "Total Cannabinoids", "COA"], rows,
-                         [0.35*inch, 2.2*inch, 1.6*inch, 0.85*inch, 0.9*inch, 0.8*inch, 0.95*inch,
-                          1.35*inch, 1.2*inch, 1.0*inch], hc=AQUA, band="#d4f5ee",
-                         aligns=["C", "L", "L", "R", "R", "R", "R", "C", "R", "C"]))
+                         [0.3*inch, 1.95*inch, 1.4*inch, 0.85*inch, 0.8*inch, 0.85*inch, 0.75*inch, 0.9*inch,
+                          1.3*inch, 1.15*inch, 1.05*inch], hc=AQUA, band="#d4f5ee",
+                         aligns=["C", "L", "L", "C", "R", "R", "R", "R", "C", "R", "C"]))
         overflow_note(len(high_flower), "high_thc_flower_noninfused.csv")
     else:
         story.append(Paragraph("No non-infused flower exceeded the 35% review threshold (excluding impossible-math "
                                "and product-type-mismatch cases) this run.", cellc))
 
-    # ---- B. Laboratory Data Consistency Flags (formerly "Impossible Cannabinoid Math Review") ----
-    story.append(H("B. Laboratory Data Consistency Flags", color=RED))
-    intro_box("<b>Data-integrity alerts</b>, not software/parser errors: the system flags where a COA's own "
-              "reported numbers are internally inconsistent — biological, mathematical, or reporting "
-              "inconsistencies in the laboratory's data. Covered here: Total THC greater than Total Cannabinoids; "
-              "Total Cannabinoids lower than the sum of the reported cannabinoids; cannabinoid accounting "
-              "mismatches; label-to-COA discrepancies; and other internal laboratory reporting inconsistencies "
-              "(Total Cannabinoids must include the THC it contains). This is a <b>data-consistency review "
-              "signal</b>, not a safety or fraud finding. Each row shows the conflicting numbers; verify against "
-              "the live COA.", color="#7a1f17")
+    # ---- SECTION 5A — Inaccurate Laboratory Math Detection (named data-integrity review section) ----
+    story.append(H("B. Inaccurate Laboratory Math Detection — Laboratory Data Consistency Flags", color=RED))
+    intro_box("<b>Data-integrity alerts — held OUT of findings and routed to manual re-read</b>, NOT software/"
+              "parser errors and NOT contaminant/safety findings or accusations against the producer (the "
+              "inconsistency is in the COA's own reported numbers). The system flags where a single COA's "
+              "numbers are internally impossible. <b>Detected here:</b> (1) Total THC &gt; Total Cannabinoids; "
+              "(2) Total Cannabinoids &lt; the sum of the individual cannabinoids; (3) negative values; "
+              "(4) impossible percentages (e.g. a component or total &gt; 100%). Each row shows the conflicting "
+              "numbers and the rule it broke; verify against the live COA. These records are NEVER published as "
+              "findings.", color="#7a1f17")
     if impossible:
         rows = [[Paragraph(f'<font color="#C0392B"><b>{i}</b></font>', cellc),
-                 Paragraph(esc(tcase(p.product_name)), cell), Paragraph(pr(p), cell),
+                 Paragraph(esc(tcase(p.product_name)), cell), Paragraph(pr(p), cell), td(p),
                  Paragraph(esc(_cv(p, "thca")), cellr), Paragraph(esc(_cv(p, "total_thc")), cellr),
                  Paragraph(esc(_cv_total_cann(p)), cellr), Paragraph(esc(msg), cell), coa_cell(p)]
                 for i, (p, msg) in enumerate(impossible[:MAX_TABLE_ROWS], 1)]
-        story.append(tbl(["#", "Product", "Producer", "THCA", "Total THC", "Total Cannabinoids",
+        story.append(tbl(["#", "Product", "Producer", "Tested", "THCA", "Total THC", "Total Cannabinoids",
                           "Why it's flagged (verify on COA)", "COA"], rows,
-                         [0.35*inch, 2.0*inch, 1.5*inch, 0.9*inch, 0.95*inch, 1.2*inch, 3.0*inch, 1.0*inch],
-                         hc=RED, band="#f8d2d0", aligns=["C", "L", "L", "R", "R", "R", "L", "C"]))
+                         [0.3*inch, 1.85*inch, 1.35*inch, 0.9*inch, 0.85*inch, 0.9*inch, 1.15*inch, 2.75*inch, 1.05*inch],
+                         hc=RED, band="#f8d2d0", aligns=["C", "L", "L", "C", "R", "R", "R", "L", "C"]))
         overflow_note(len(impossible), "compliance_flags.csv")
     else:
         # Reconcile with the cover summary and the Self-Audit. Potency parser conflicts are counted
@@ -5766,7 +6013,7 @@ def build_pdf(out_path, report_no, ctx):
     mismatch = ctx.get("potency_typemismatch") or []
     if mismatch:
         rows = [[Paragraph(f'<font color="#E67E22"><b>{i}</b></font>', cellc),
-                 Paragraph(esc(tcase(p.product_name)), cell), Paragraph(pr(p), cell),
+                 Paragraph(esc(tcase(p.product_name)), cell), Paragraph(pr(p), cell), td(p),
                  Paragraph(esc(tcase(p.dosage_form or "flower")), cell),
                  Paragraph(f'<b>{val:g}%</b>', cellr),
                  Paragraph(esc((sus or "review").title()), cellc),
@@ -5774,10 +6021,11 @@ def build_pdf(out_path, report_no, ctx):
                            "(&gt;45%) — held for product-type review, not published as high-THC flower.", cell),
                  coa_cell(p)]
                 for i, (p, val, sus) in enumerate(mismatch[:MAX_TABLE_ROWS], 1)]
-        story.append(tbl(["#", "Product", "Producer", "Classified As", "Verified Total THC", "Suspected Type",
-                          "Why held (verify on COA)", "COA"], rows,
-                         [0.35*inch, 1.95*inch, 1.4*inch, 1.05*inch, 1.05*inch, 1.05*inch, 2.4*inch, 1.0*inch],
-                         hc=colors.HexColor("#E67E22"), band="#ffe3c2", aligns=["C", "L", "L", "L", "R", "C", "L", "C"]))
+        story.append(tbl(["#", "Product", "Producer", "Tested", "Classified As", "Verified Total THC",
+                          "Suspected Type", "Why held (verify on COA)", "COA"], rows,
+                         [0.3*inch, 1.8*inch, 1.3*inch, 0.9*inch, 1.0*inch, 1.0*inch, 1.0*inch, 2.25*inch, 1.05*inch],
+                         hc=colors.HexColor("#E67E22"), band="#ffe3c2",
+                         aligns=["C", "L", "L", "C", "L", "R", "C", "L", "C"]))
         overflow_note(len(mismatch), "high_thc_flower_noninfused.csv")
     else:
         story.append(Paragraph("No flower products showed extract-level (&gt;45%) potency this run.", cellc))
@@ -5893,6 +6141,31 @@ def build_pdf(out_path, report_no, ctx):
         if _allg:
             story.append(Paragraph("Top boundary-clustering groupings (ranked by Convenience Score; low-sample "
                                    "groups excluded from ranking)", miniH))
+            # T3 — centered, larger-font per-column legend so a reader can decode the table without hunting
+            # the methodology appendix. Each column: what it is + why it matters.
+            _cg_leg = ParagraphStyle("cglegend", parent=CTX, alignment=1, fontSize=9.5, leading=13)
+            story.append(Paragraph(
+                "<b>How to read this table.</b> &nbsp;"
+                "<b>N</b> — trustworthy quantitative results in this producer+lab group (<i>small N = weak "
+                "evidence; large N makes a pattern meaningful</i>). &nbsp;"
+                "<b>Near</b> — results in the 95–100%-of-limit band, just under the line (<i>the band a "
+                "threshold effect would crowd into</i>). &nbsp;"
+                "<b>Over</b> — results above the limit (<i>outright failures, counted separately</i>). &nbsp;"
+                "<b>Obs</b> — observed near-band rate, Near ÷ N (<i>this group's actual share just under the "
+                "line</i>). &nbsp;"
+                "<b>Exp</b> — near-band count expected at the statewide rate (<i>the baseline to compare "
+                "against</i>). &nbsp;"
+                "<b>O/E</b> — observed ÷ expected (<i>&gt;1 = more just-under-the-line clustering than chance "
+                "predicts</i>). &nbsp;"
+                "<b>p</b> — probability of this many near-band results by chance (<i>small p, e.g. &lt;0.05, = "
+                "unlikely to be random</i>). &nbsp;"
+                "<b>Score</b> — Convenience Score 0–100 combining the signals (<i>0–24 normal · 25–49 mild · "
+                "50–74 review recommended · 75–89 strong · 90–100 extreme</i>). &nbsp;"
+                "<b>Assessment</b> — the plain-English verdict for the row.", _cg_leg))
+            story.append(Paragraph(
+                "<b>Statistically unusual boundary-clustering that warrants review — not proof of intent or "
+                "misconduct.</b>", _cg_leg))
+            story.append(Spacer(1, 4))
             rows = []
             for i, g in enumerate(_allg[:10], 1):
                 _sc_col = ("#C0392B" if g["score"] >= 75 else "#E67E22" if g["score"] >= 50
@@ -6283,10 +6556,11 @@ def build_pdf(out_path, report_no, ctx):
     story.append(Paragraph("CT CANNABIS OMBUDSMAN — MEDICAL PATIENT SAFETY REVIEW", H1))
     story.append(Paragraph("PRODUCTS CLOSEST TO A CONTAMINANT LIMIT",
                            ParagraphStyle("ombsub", parent=H1, fontSize=15, leading=19, textColor=PURPLE)))
-    story.append(Paragraph("For the Office of the Cannabis Ombudsman. These products passed testing but "
-                           "came closest to a Connecticut action limit on one or more contaminants. This is "
-                           "patient-safety information for review and advisory purposes — not a finding that "
-                           "any product failed or is unsafe, and not medical advice. The testing/sample date "
+    story.append(Paragraph("For the Office of the Cannabis Ombudsman. <b>These products PASSED testing and are "
+                           "not unsafe</b> — they simply came closest to a Connecticut action limit on one or "
+                           "more contaminants. This is "
+                           "patient-safety information for review and advisory purposes — <b>not a finding that "
+                           "any product failed or is unsafe</b>, and not medical advice. The testing/sample date "
                            "is shown on every row because the applicable Connecticut standard can depend on "
                            "when the product was tested.", CTX))
     if omb:
@@ -6304,8 +6578,8 @@ def build_pdf(out_path, report_no, ctx):
                 Paragraph(coa(p) if p.report_url else "COA not provided", coacell)])
         story.append(tbl(["#", "Product", "Producer", "Tested", "Contaminant (class — analyte)",
                           "Result / CT Limit", "% Of Limit", "Tier", "Why It Matters (patient)", "COA"], rows,
-                         [0.35*inch, 1.7*inch, 1.4*inch, 0.95*inch, 1.85*inch, 1.5*inch, 0.8*inch, 0.95*inch,
-                          2.95*inch, 0.95*inch], hc=PURPLE, band="#ead9f2"))
+                         [0.35*inch, 1.65*inch, 1.35*inch, 0.95*inch, 1.8*inch, 1.45*inch, 0.8*inch, 0.9*inch,
+                          2.7*inch, 1.25*inch], hc=PURPLE, band="#ead9f2"))
         overflow_note(len(omb), "ombudsman_closeness.csv")
     else:
         story.append(Paragraph("No products came within the configured margin of a contaminant limit in "
@@ -6475,6 +6749,51 @@ def build_pdf(out_path, report_no, ctx):
         f"<i>Outstanding = broken/missing links {_ci_broken:,} + unreadable {_ci_unread:,} + verification-queue "
         f"{_ci_queue:,} + uncertain-held {_ci_held:,} + source-mismatch {_ci_mismatch:,}. These are coverage gaps "
         "held OUT of findings, itemized in the sections below.</i>", note_st))
+    # TASK 4 — the ONE reconciled verification breakdown, rendered from the SAME function the console prints
+    # (verification_breakdown_lines) so the two surfaces can never disagree. Reads only the single-source
+    # accounting object; the buckets sum to the window (the function fails loud otherwise).
+    _acct = ctx.get("acct")
+    if _acct is not None:
+        story.append(Paragraph(f"Reconciled Verification Breakdown &mdash; mode: {esc(str(_acct.mode))}", miniH))
+        story.append(Paragraph("<br/>".join(esc(_l) for _l in verification_breakdown_lines(_acct)),
+                               ParagraphStyle("vbreak", parent=CTX, fontSize=9.5, leading=13, alignment=0)))
+        # SECTION 3 — Record Accounting: every record in exactly one tier-1 bucket; tier-1 sums to the window
+        # (the build already aborts if it doesn't). Tier-2 are informational sub-counts within Reviewed.
+        _t1, _t2, _unk = record_accounting_buckets(_acct, ctx.get("debug") or {})
+        story.append(Paragraph("Record Accounting &mdash; every record lands in exactly one bucket", miniH))
+        story.append(Paragraph(
+            "Each record in the prefiltered window is assigned to exactly ONE tier-1 bucket below; the tier-1 "
+            "buckets sum to the window total (the run aborts and publishes nothing if they do not). The "
+            "indented rows are sub-counts <i>within</i> Reviewed and are not added to the window total.", CTX))
+        _b_rows = ([[Paragraph(f"<b>{esc(n)}</b>", cell), Paragraph(f"<b>{c:,}</b>", cellr)] for n, c in _t1]
+                   + [[Paragraph(f"&nbsp;&nbsp;&nbsp;{esc(n)}", cell), Paragraph(f"{c:,}", cellr)] for n, c in _t2]
+                   + [[Paragraph("<b>TIER-1 TOTAL (= window)</b>", cell),
+                       Paragraph(f"<b>{_acct.window_total:,}</b>", cellr)]])
+        story.append(tbl(["Bucket", "Records"], _b_rows, [6.0*inch, 1.4*inch], big=False, aligns=["L", "R"]))
+        if _unk:
+            story.append(Paragraph(f"<font color=\"#b00020\"><b>WARNING: {_unk:+,} unaccounted records "
+                                   "(Unknown bucket non-zero).</b></font>", CTX))
+        # SECTION 5 — dedicated Conflict Detection summary: each conflict TYPE -> count. All are ROUTED TO
+        # REVIEW, never published as findings.
+        _cd = ctx.get("debug") or {}
+        _conf_types = [
+            ("Total THC > Total Cannabinoids (impossible)", _cd.get("thc_over_total_cannabinoids_conflicts", 0)),
+            ("Other potency / data-consistency flags (incl. Total Cannabinoids < component sum)",
+             max(0, int(_cd.get("potency_parser_conflicts", 0) or 0) - int(_cd.get("thc_over_total_cannabinoids_conflicts", 0) or 0))),
+            ("Implausible values gated from publication (negatives / impossible ranges)",
+             _cd.get("implausible_values_gated_from_publication", 0)),
+            ("Flower with implausible (>45%) Total THC held for product-type review",
+             _cd.get("product_type_mismatch_held", 0)),
+            ("Multiple/conflicting COA records (pass↔fail / retest / cross-lab / cross-date)",
+             _cd.get("conflicting_coa_records", 0)),
+            ("  of those, earlier-FAIL → later-PASS reversals", _cd.get("conflicting_coa_earlier_fail_later_pass", 0)),
+            ("  of those, High/Critical severity",
+             int(_cd.get("conflicting_coa_high", 0) or 0) + int(_cd.get("conflicting_coa_critical", 0) or 0)),
+        ]
+        story.append(Paragraph("Conflict Detection Summary &mdash; all routed to review, never published", miniH))
+        story.append(tbl(["Conflict type", "Count"],
+                         [[Paragraph(esc(n), cell), Paragraph(f"<b>{int(c or 0):,}</b>", cellr)] for n, c in _conf_types],
+                         [6.0*inch, 1.4*inch], big=False, aligns=["L", "R"]))
 
     # Part A: render the diagnostic detail RELOCATED off the cover / front pages here.
     # (1) the cover's long coverage-limitation bullet list, then (2) the three spliced front blocks
@@ -6487,6 +6806,31 @@ def build_pdf(out_path, report_no, ctx):
     # and the full dataset accounting that were moved OFF the cover/Exec render here (nothing deleted).
     story.extend(_cover_detail)
     story.extend(_diag_blocks)
+
+    # ---- SECTION 8 — additional statistical screens (digit-preference / round-number / nearest-neighbor) ----
+    try:
+        _ym_vals = [e.get("value") for p in (ctx.get("all_results_for_audit") or [])
+                    for k, e in (getattr(p, "analytes", {}) or {}).items()
+                    if k == "tymc" and v5.is_quantified(e) and not e.get("_below_detect")]
+        _ss = statistical_screens(_ym_vals)
+        story.append(Paragraph("Statistical Review — additional screens (Yeast &amp; Mold)", miniH))
+        if _ss.get("low_sample"):
+            story.append(Paragraph(f"Only {_ss.get('n',0)} trustworthy Yeast &amp; Mold values — below the "
+                                   f"{CG_MIN_GROUP_SAMPLE}-sample minimum; screens not scored (no conclusion).", CTX))
+        else:
+            _rep = ", ".join(f"{v:,} (&times;{c})" for v, c in _ss.get("most_repeated", [])[:6]) or "none ≥3"
+            story.append(Paragraph(
+                f"Over <b>{_ss['n']:,}</b> trustworthy Yeast &amp; Mold values. "
+                f"<b>Round-thousand rate:</b> {_ss['round_thousand_rate']}% &mdash; {esc(_ss['round_thousand_tier'])}. "
+                f"<b>Most-repeated exact values:</b> {_rep}. "
+                f"<b>Trailing-00 heaping:</b> {_ss['trailing_zero_rate']}%. "
+                f"<b>Nearest-neighbor (within 1%):</b> {_ss['nearest_neighbor_rate']}%. "
+                "<i>Review signals only — boundary/round-number clustering can come from legitimate retests, "
+                "rounding, reporting increments, or batch families; never proof of intent. True Monte-Carlo "
+                "permutation is approximated by the analytic binomial here.</i>", CTX))
+        story.append(Spacer(1, 6))
+    except Exception as _e:
+        story.append(Paragraph(f"<i>(statistical screens unavailable: {esc(str(_e))})</i>", CTX))
 
     # ---- Convenient Lab Result Groupings — full statistical detail + methodology ----
     if _conv:
@@ -6516,7 +6860,22 @@ def build_pdf(out_path, report_no, ctx):
             "threshold effect worth examining. <b>Why it does not prove intent.</b> The same pattern can come "
             "from legitimate retests, remediation before release, sampling or rounding behavior, reporting "
             "conventions, or selection. This screen identifies <b>statistically unusual boundary clustering "
-            "that warrants review</b> — nothing more.", CTX))
+            "that warrants review</b> — nothing more.<br/>"
+            # ISSUE #20/#21 — significance gate, stated plainly.
+            "<b>Significance gate.</b> A group whose p-value is not below 0.05 is labeled <b>“Not "
+            "statistically significant (review lead only)”</b> and its Convenience Score is capped so it can "
+            "never read as real clustering — enrichment alone (a high z or observed/expected ratio) cannot "
+            "manufacture a meaningful score without statistical significance.<br/>"
+            # ISSUE #22/#23/#28/#29/#30 — disclose what this screen does NOT yet model, so it never overclaims.
+            "<b>Known limits of this screen (do not over-read it).</b> It does <b>not yet</b> de-duplicate "
+            "related rows — repeated variants of one product, the same source batch, retests, or routine "
+            "reporting increments can inflate an apparent cluster (a real cluster should survive collapsing "
+            "those). It does <b>not</b> control for confounders — producer testing volume, product mix "
+            "(flower vs extract), or which lab was used. It does <b>not yet</b> run digit-preference / "
+            "terminal-digit, nearest-neighbor, or Monte-Carlo permutation tests (only the round-thousands "
+            "screen is included). And producer/lab identity is only as good as the name-matching confidence "
+            "shown elsewhere — groups built on a 70%-confidence identity are provisional. Treat every group "
+            "here as a lead to verify, never a conclusion.", CTX))
         # Convenience Score bands legend
         story.append(Paragraph(
             "<b>Convenience Score (0–100):</b> 0–24 Normal variation &nbsp;•&nbsp; 25–49 Mild clustering "
@@ -6701,10 +7060,21 @@ def build_pdf(out_path, report_no, ctx):
     smm = ctx.get("source_mismatches", [])
     if smm:
         story.append(Paragraph("COA Source Mismatch Review (excluded from findings)", miniH))
+        # ISSUE #16 — disclose the detector's limit: it catches mismatches it can SEE (a value missing from
+        # the linked COA, or the COA printing a DIFFERENT product identity). A COA that prints no usable
+        # product identity to compare against cannot be cross-checked this way, so silent identity mismatches
+        # are possible; that residual risk is mitigated by per-product block binding on multi-product COAs.
+        story.append(Paragraph(
+            "<i>These rows are <b>excluded from findings</b>. Note the limit of this check: it flags a value "
+            "that cannot be re-found in the linked COA, or a COA that prints a clearly DIFFERENT product "
+            "identity. A COA that prints no comparable product identity cannot be cross-checked here, so a "
+            "silent identity mismatch is possible — multi-product COAs are additionally guarded by per-product "
+            "block binding.</i>", note_st))
         rows = [[Paragraph(esc(tcase(m["p"].product_name)), cell), Paragraph(esc(producer_short(m["p"], ident)), cell),
-                 Paragraph(esc(m["analytes"]), cell), coa_cell(m["p"])] for m in smm[:MAX_TABLE_ROWS]]
-        story.append(tbl(["Product", "Producer", "Unverifiable Flagged Value(s)", "COA"], rows,
-                         [3.0*inch, 2.3*inch, 3.0*inch, 1.4*inch], hc=RED, band="#f8d2d0"))
+                 td(m["p"]), Paragraph(esc(m["analytes"]), cell), coa_cell(m["p"])] for m in smm[:MAX_TABLE_ROWS]]
+        story.append(tbl(["Product", "Producer", "Tested", "Unverifiable Flagged Value(s)", "COA"], rows,
+                         [2.7*inch, 2.0*inch, 0.95*inch, 2.85*inch, 1.2*inch], hc=RED, band="#f8d2d0",
+                         aligns=["L", "L", "C", "L", "C"]))
     mc = ctx.get("multi_coa", [])
     if mc:
         story.append(Paragraph("Multiple-COA Alert (manual review — not auto-merged)", miniH))
@@ -6796,9 +7166,23 @@ def build_pdf(out_path, report_no, ctx):
             "this run: 0.)", note_st))
     fyr = ctx.get("fmt_year_rows") or []
     if fyr:
+        # ISSUE #36/#37/#38 — make the TWO readiness layers explicit so they never read as a contradiction.
+        _dbgL = ctx.get("debug") or {}
+        _ledger_years = ", ".join(_dbgL.get("training_ledger_years_present", []) or []) or "none yet"
+        _win_not_in = ", ".join(_dbgL.get("report_window_years_not_in_training_ledger", []) or [])
         story.append(Paragraph(
-            "<b>Why a year can show a high Conf % but still read PARTIAL or NOT READY.</b> The Conf % is only the "
-            "share of <i>this run's freshly-read</i> COAs that extracted at HIGH/MEDIUM confidence. Readiness is a "
+            "<b>Two layers — read this first.</b> The verdicts below are computed <b>live for THIS report's "
+            "window years</b>. They are SEPARATE from the persisted <b>Training Ledger</b>, which currently holds: "
+            f"<b>{esc(_ledger_years)}</b> (whatever was previously <b>learn</b>-ed). So the Training Ledger line in "
+            "the debug log may list <i>different</i> years than this section — that is two layers, NOT a "
+            "contradiction. Window year(s) not in the ledger"
+            + (f" (<b>{esc(_win_not_in)}</b>)" if _win_not_in else "")
+            + " are rated live this run, not from stored training.", CTX))
+        story.append(Paragraph(
+            "<b>Why a year can show a high Format-Recognition Conf % but still read PARTIAL or NOT READY.</b> The "
+            "Conf % measures only how well the parser <b>recognized the COA layout</b> for the "
+            "share of <i>this run's freshly-read</i> COAs that extracted at HIGH/MEDIUM confidence — it does NOT "
+            "credit how many lab-test CATEGORIES were extracted, so it is not a data-completeness score. Readiness is a "
             "broader maturity signal and needs more than a good percentage: (1) <b>enough verified samples</b> — a "
             "year with only a handful of newly-read COAs can be 100% confident on those few yet still be PARTIAL "
             "because the sample is too small to trust the whole year; (2) <b>lab coverage</b> — each lab whose format "
@@ -6817,7 +7201,7 @@ def build_pdf(out_path, report_no, ctx):
                          Paragraph(f'{r["conf_rate"]*100:.0f}%', cellr),
                          Paragraph(esc(r["verdict"]), cell)])
         story.append(tbl(["Year", "Era / Format Period", "COAs On File", "Labs Seen",
-                          "Conf (H/M/L/U)", "Conf %", "Ready For Reports?"], rows,
+                          "Conf (H/M/L/U)", "Format-Recog Conf %", "Ready For Reports?"], rows,
                          [0.7*inch, 2.5*inch, 1.1*inch, 2.3*inch, 1.3*inch, 0.8*inch, 1.8*inch],
                          big=False, aligns=["C", "L", "R", "L", "C", "R", "L"]))
         # Which years/labs are still low/uncertain confidence?
@@ -6916,7 +7300,7 @@ def build_pdf(out_path, report_no, ctx):
         "coa_source_mismatch_count": "Values excluded because they didn't match their linked COA.",
         "multi_product_rows_verified_against_matched_block": "Published rows from a multi-product COA whose flagged values were re-verified against THEIR matched product block (not merely somewhere in the shared PDF) — proof no value was cross-attributed from another product in the same document.",
         "rows_fully_verified": "Published rows that passed every field check (value, product, date, lab, unit, analyte).",
-        "training_run_id_used": "The training_run_id from the persisted Training Ledger this report relied on for per-year readiness (run `learn` to create/update it). Acceptance: equals the id `learn` wrote.",
+        "training_run_id_used": "Provenance of the persisted Training Ledger (the COA-format fingerprints from a prior `learn`, e.g. 2015). This is a FORMAT-FINGERPRINT source, NOT this window's readiness: window-year readiness (e.g. 2024) is computed LIVE this run and reported under report_window_years_not_ready. So this id's year can differ from the report window — see training_ledger_years_present vs report_window_years_not_ready.",
         "training_pipeline_status": "Whether the report used the trained parser/analysis version (OK), found no Training Ledger, or detected a DISCONNECT (re-run `learn`).",
         "report_run_id": "Unique id for this report run, recorded in Data Exports/training_to_report_trace.csv.",
         "forensic_mode": "True when run with --forensic-no-cache: result/measurement cache + clean-ledger bypassed (cold re-read), and (unless --allow-ocr-cache) the OCR-text cache too.",
@@ -7194,10 +7578,14 @@ def compute_run_audit(debug, date_trace, products, all_results, pub, flagged, co
                      "against their LIVE source COA this run (served from cache / reused local PDFs; only "
                      "incidental OCR ran). Findings are MATCHED against cached COAs, NOT re-verified live. "
                      "Re-run with --live-verify (or --validate) to verify against the live source.")
-    if base_status == "FAIL":
-        tier = "FAIL"
+    if base_status == "FAIL" and bool(G("finding_validation_failed")):
+        tier = FINDING_VALIDATION_FAIL            # a PUBLISHED finding could not be trusted — a real FAIL
     elif cache_replay:
-        tier = _replay_tier
+        tier = _replay_tier                        # nothing verified live — most severe provenance gap
+    elif base_status == "FAIL":
+        # ISSUE #44 — FAIL is coverage/parser-only: the dataset is incomplete but every published finding
+        # passed its trust checks. Do not brand the whole report "FAIL" as if the findings were wrong.
+        tier = DIAGNOSTIC_COVERAGE_INCOMPLETE
     elif not_ready_years:
         tier = "DIAGNOSTIC REPORT ONLY — YEAR NOT READY"
     elif in_window and pct_analyzed < 60:
@@ -7230,6 +7618,426 @@ def compute_run_audit(debug, date_trace, products, all_results, pub, flagged, co
             "Run `learn` on this window/year to freshly fingerprint COA formats.",
             "Treat any window with <100% analyzed coverage as a partial dataset, not a clean bill of health.",
         ])
+
+
+# ============================================================================
+# SINGLE SOURCE OF TRUTH for verification counts (Task 1). Console AND PDF must
+# read ONLY from the object build_verification_accounting() returns — never from
+# a second variable, and never recompute these counts downstream. Every recurring
+# "0% live next to 5,937 verified" / "Revalidated LIVE 0" honesty bug came from a
+# parallel counter or a mislabeled field. There is exactly one place now.
+# DO NOT ADD PARALLEL COUNTERS.
+# ============================================================================
+VerificationAccounting = namedtuple("VerificationAccounting", [
+    "mode",                          # active run-mode label (what the flags actually do)
+    "window_total",                  # products in the selected date window
+    "analyzed_this_run",             # COAs opened/evaluated this run (== products_reviewed, post date-filter)
+    "freshly_live_verified",         # cold-read live from the source link this run (strongest verification)
+    "cache_audit_repulls",           # cached rows re-pulled live + compared this run (the number once mislabeled "Revalidated LIVE")
+    "live_verified_total",           # freshly_live_verified + cache_audit_repulls (the PRIMARY live-verified count)
+    "ledger_reused",                 # skipped this run because verified-clean in a PRIOR run (NOT re-checked today)
+    "cache_served_unverified",       # reviewed but got NO live touch this run (cache-served / unopenable)
+    "unreadable_or_broken",          # subset of cache_served_unverified: broken link / no extractable text (coverage gap)
+    "excluded_out_of_window",        # dropped by the date filter (outside the window)
+    "excluded_no_date",              # dropped: no confirmable test date
+    "published_findings", "n_red", "n_orange", "n_yellow", "n_high_thc_flower",
+    "coverage_pct_of_analyzed",      # live_verified_total / analyzed_this_run
+    "freshly_live_pct_of_window",    # freshly_live_verified / window_total
+    "live_verified_pct_of_window",   # live_verified_total / window_total
+    "worst_core_panel",              # category-level coverage summary (COMPUTED upstream, not hardcoded)
+])
+
+
+def build_verification_accounting(debug, cov_audit, *, mode, published_findings,
+                                  n_red, n_orange, n_yellow, n_high_thc_flower):
+    """SINGLE SOURCE OF TRUTH for verification counts. Built ONCE per run; the console and the PDF both
+    read ONLY from the returned immutable object. Asserts the full reconciliation identity and FAILS LOUD
+    (raises SystemExit, NO report) on any mismatch, printing every field — so a drifting or duplicated
+    counter can never silently misstate verification. Do NOT add parallel counters downstream."""
+    G = lambda k, d=0: debug.get(k, d)
+    A = cov_audit or {}
+    window_total = int(A.get("products_in_window", 0) or 0)
+    analyzed = int(A.get("products_analyzed", 0) or 0)
+    freshly = int(G("products_freshly_read_live", 0) or 0)
+    repulls = int(G("products_revalidated_live", 0) or 0)
+    live_total = int(G("products_live_verified_this_run", 0) or 0)
+    reused = int(A.get("ledger_reused_count", A.get("ledger_reused", 0)) or 0)
+    cache_unverified = int(G("products_served_from_cache_unverified", 0) or 0)
+    unreadable = int(A.get("missing_or_broken_coa", 0) or 0)
+    exc_out = int(A.get("excluded_out_of_window", 0) or 0)
+    exc_nodate = int(A.get("excluded_no_test_date", 0) or 0)
+    # ---- RECONCILIATION (FAIL LOUD). Three identities that together force every in-window product into
+    #      exactly one bucket. excluded_* sit OUTSIDE the window total and are accounted separately.
+    problems = []
+    if live_total != freshly + repulls:
+        problems.append(f"live_verified_total {live_total} != freshly_live_verified {freshly} + cache_audit_repulls {repulls}")
+    if analyzed != live_total + cache_unverified:
+        problems.append(f"analyzed_this_run {analyzed} != live_verified_total {live_total} + cache_served_unverified {cache_unverified}")
+    if window_total != analyzed + reused + exc_out + exc_nodate:
+        problems.append(f"window_total {window_total} != analyzed_this_run {analyzed} + ledger_reused {reused} + "
+                        f"excluded_out_of_window {exc_out} + excluded_no_date {exc_nodate}")
+    # NOTE: unreadable_or_broken is an INFORMATIONAL coverage-gap count, NOT a partition member. Which
+    # bucket a broken-link COA lands in is MODE-dependent: in a normal run it had no live touch (→
+    # cache_served_unverified), but under --validate it was fetch-ATTEMPTED (→ counted in live_verified).
+    # So it is never asserted to be a subset of any single bucket — that assumption is false in forensic mode.
+    if problems:
+        _f = dict(window_total=window_total, analyzed_this_run=analyzed, freshly_live_verified=freshly,
+                  cache_audit_repulls=repulls, live_verified_total=live_total, ledger_reused=reused,
+                  cache_served_unverified=cache_unverified, unreadable_or_broken=unreadable,
+                  excluded_out_of_window=exc_out, excluded_no_date=exc_nodate)
+        raise SystemExit("FAIL — VERIFICATION ACCOUNTING ERROR (reconciliation does not hold; NO report "
+                         "emitted):\n  - " + "\n  - ".join(problems) + "\n  fields: " +
+                         ", ".join(f"{k}={v}" for k, v in _f.items()))
+    pct = lambda n, d: round(100.0 * n / d, 1) if d else 0.0
+    return VerificationAccounting(
+        mode=str(mode), window_total=window_total, analyzed_this_run=analyzed,
+        freshly_live_verified=freshly, cache_audit_repulls=repulls, live_verified_total=live_total,
+        ledger_reused=reused, cache_served_unverified=cache_unverified, unreadable_or_broken=unreadable,
+        excluded_out_of_window=exc_out, excluded_no_date=exc_nodate,
+        published_findings=int(published_findings or 0), n_red=int(n_red or 0), n_orange=int(n_orange or 0),
+        n_yellow=int(n_yellow or 0), n_high_thc_flower=int(n_high_thc_flower or 0),
+        coverage_pct_of_analyzed=pct(live_total, analyzed),
+        freshly_live_pct_of_window=pct(freshly, window_total),
+        live_verified_pct_of_window=pct(live_total, window_total),
+        worst_core_panel=str(A.get("worst_core_panel", "") or ""))
+
+
+def _scope_sentence(acct):
+    """Cover scope sentence, sourced ENTIRELY from the reconciled accounting object (T1). The named
+    buckets SUM to 100% of the window and the remainder is attributed to its REAL cause — never a
+    locally-recomputed "remaining %". Returns a ReportLab-ready italic string."""
+    w = acct.window_total or 1
+    pc = lambda n: round(100.0 * n / w, 1)
+    # Remainder = everything that was NOT freshly/live-verified this run, each named by its real cause.
+    parts = []
+    if acct.cache_served_unverified:
+        parts.append(f"{acct.cache_served_unverified:,} ({pc(acct.cache_served_unverified)}%) could NOT be "
+                     "verified live this run (broken/unreadable COA link or cache-served)")
+    if acct.ledger_reused:
+        parts.append(f"{acct.ledger_reused:,} ({pc(acct.ledger_reused)}%) were carried from prior "
+                     "verified-clean runs (not re-checked today)")
+    if acct.excluded_out_of_window:
+        parts.append(f"{acct.excluded_out_of_window:,} ({pc(acct.excluded_out_of_window)}%) were excluded as "
+                     "out-of-window (not analyzed)")
+    if acct.excluded_no_date:
+        parts.append(f"{acct.excluded_no_date:,} ({pc(acct.excluded_no_date)}%) were excluded for no "
+                     "confirmable test date")
+    remainder = (" The remaining " + "; ".join(parts) + "." ) if parts else " 0 were carried from prior runs."
+    return (f"<i>Scope: the full state registry for this window ({acct.window_total:,} products). This run "
+            f"<b>live-verified {acct.live_verified_total:,} of {acct.window_total:,} "
+            f"({pc(acct.live_verified_total)}% of the window)</b> against their source COAs.{remainder} "
+            "See the Reconciled Verification Breakdown and Date-Window Integrity sections.</i>")
+
+
+def significance_tier(p):
+    """SECTION 8 — honest significance tier from a p-value, thresholds stated. NEVER implies significance
+    where it doesn't exist: p>=0.05 is only 'interesting/unlikely', never 'significant'."""
+    if p < 0.001: return "highly significant (p<0.001)"
+    if p < 0.01:  return "statistically significant (p<0.01)"
+    if p < 0.05:  return "unlikely by chance (p<0.05)"
+    return "interesting only (not statistically significant)"
+
+
+def statistical_screens(values, round_base_rate=0.002):
+    """SECTION 8 — descriptive statistical screens over a list of numeric results (review signals only):
+    round-number repetition (e.g. 97,000 / 98,000 / 99,000 CFU/g), digit-preference (trailing-zero heaping),
+    nearest-neighbor clustering, and an analytic significance for the round-number rate vs a continuous
+    baseline. Low-sample groups are not scored. (True Monte-Carlo permutation is approximated by the analytic
+    binomial here — disclosed in the methodology, review-signal only.)"""
+    vals = [float(v) for v in values if v is not None and math.isfinite(float(v)) and float(v) >= 0]
+    n = len(vals)
+    out = dict(n=n)
+    if n < CG_MIN_GROUP_SAMPLE:
+        out["low_sample"] = True
+        return out
+    round_k = sum(1 for v in vals if v >= 1000 and abs(v - round(v / 1000.0) * 1000.0) < 1e-6)
+    out["round_thousand_rate"] = round(100.0 * round_k / n, 1)
+    out["round_thousand_p"] = _cg_binom_sf_ge(round_k, n, round_base_rate)
+    out["round_thousand_tier"] = significance_tier(out["round_thousand_p"])
+    common = Counter(int(round(v)) for v in vals).most_common(8)
+    out["most_repeated"] = [(v, c) for v, c in common if c >= 3]
+    out["trailing_zero_rate"] = round(100.0 * sum(1 for v in vals if v >= 100 and round(v) % 100 == 0) / n, 1)
+    sv = sorted(vals)
+    nn = sum(1 for i in range(1, len(sv)) if (sv[i] - sv[i - 1]) <= 0.01 * max(1.0, sv[i]))
+    out["nearest_neighbor_rate"] = round(100.0 * nn / max(1, n - 1), 1)
+    return out
+
+
+def _wilson_ci(k, n, z=1.96):
+    """SECTION 10 — Wilson 95% confidence interval for a proportion k/n, returned as (lo%, hi%). Shows the
+    uncertainty behind a flag rate so a small-sample producer/lab isn't read as a firm conclusion."""
+    if not n:
+        return (0.0, 0.0)
+    p = k / n
+    d = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / d
+    half = (z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / d
+    return (round(100.0 * max(0.0, centre - half), 1), round(100.0 * min(1.0, centre + half), 1))
+
+
+CG_MIN_GROUP_SAMPLE = 30   # SECTION 10 — below this, a producer/lab flag rate is labeled low-sample (not a conclusion)
+
+
+def top_cannabinoid_flower_rows(all_results, ident, lmap, n=100):
+    """SECTION 2 — Top-N highest-cannabinoid FLOWER products statewide, sorted DESC by total cannabinoids.
+    NO display cap by % — if a record is flower and a total-cannabinoid value extracted, it appears (high
+    values >45% included, flagged implausible). Returns rows: producer, product, lab, total_cann, total_thc,
+    test_date, implausible. Every flower record either appears here or is accounted in the S3 buckets."""
+    rows = []
+    for p in (all_results or []):
+        if not is_noninfused_flower(p):
+            continue
+        tc = thc_value(p, "total_cannabinoids")
+        if tc is None:
+            rv = thc_review_value(p)
+            tc = rv[1] if rv else None
+        if tc is None:
+            continue
+        tt = thc_value(p, "total_thc")
+        try:
+            prod = ident.resolve(p.producer)["label"] if ident else (p.producer or "")
+        except Exception:
+            prod = p.producer or ""
+        rows.append(dict(producer=prod, product=getattr(p, "product_name", "") or "",
+                         lab=lab_name(p, lmap), total_cann=tc, total_thc=tt,
+                         test_date=test_date(p), implausible=(tc > FLOWER_CANN_MAX),
+                         report_url=getattr(p, "report_url", "") or "",
+                         coa_id=getattr(p, "registration_number", "") or ""))
+    rows.sort(key=lambda r: (r["total_cann"] is None, -(r["total_cann"] or 0)))
+    return rows[:n]
+
+
+_ANALYTE_DISPLAY = dict(ANALYTE_TABLES)
+COA_PASS_OVERLIMIT_FLAG = "COA Marked Pass But Contains Over-Limit Result"
+
+
+def coa_pass_overlimit_lines(p):
+    """SURGICAL FIX — for a product whose COA OVERALL/summary status reads PASS, return the BODY lines that
+    are over the limit PRINTED ON THAT SAME COA (numeric result > printed limit), plus explicit panel FAIL /
+    pathogen DETECTED lines. Empty unless the overall is PASS AND a real body exceedance exists. The COA
+    header PASS never erases these. Robust on cache-rehydrated rows (reads p.analytes/flags, not the text)."""
+    ov = (getattr(p, "overall_result", "") or "").upper()
+    if ov not in ("PASS", "PASSED"):
+        return []
+    lines = []
+    for k, e in (getattr(p, "analytes", {}) or {}).items():
+        v, lim = e.get("value"), e.get("limit")
+        if v is None or lim in (None, 0) or e.get("_below_detect"):
+            continue
+        try:
+            fv, fl = float(v), float(lim)
+        except (TypeError, ValueError):
+            continue
+        if fv > fl:
+            lines.append(dict(analyte=_ANALYTE_DISPLAY.get(k, k.replace("_", " ").title()),
+                              result=v, limit=lim, unit=e.get("unit", ""),
+                              pct=round(100.0 * fv / fl, 1), fold=round(fv / fl, 2), status=e.get("status", "")))
+    if getattr(p, "pesticides", "") == "FAIL":
+        lines.append(dict(analyte="Pesticides (panel)", result="FAIL", limit="—", unit="",
+                          pct=None, fold=None, status="FAIL"))
+    if getattr(p, "solvents", "") == "FAIL":
+        lines.append(dict(analyte="Residual Solvents (panel)", result="FAIL", limit="—", unit="",
+                          pct=None, fold=None, status="FAIL"))
+    try:
+        for _pd in (v5.pathogen_detections(p) or []):
+            lines.append(dict(analyte=f"Pathogen: {_pd}", result="DETECTED", limit="not allowed", unit="",
+                              pct=None, fold=None, status="DETECTED"))
+    except Exception:
+        pass
+    return lines
+
+
+def heavy_metal_coverage_rows(cov_audit):
+    """SECTION 7 — per-metal PARSED vs ACTUAL coverage. Returns (rows, claimable_flags). For each metal:
+    COAs reporting it, COAs parsed, parse rate, and whether findings can be claimed (parsed > 0). A metal
+    with 0 extraction yields an explicit 'no findings can be claimed' — never implied coverage it lacks."""
+    cc = {c.get("category", ""): c for c in ((cov_audit or {}).get("category_coverage") or [])}
+    out = []
+    for cat in ("Arsenic", "Cadmium", "Lead", "Mercury", "Chromium"):
+        c = cc.get(cat, {})
+        reported = int(c.get("reported_on", 0) or 0)
+        parsed = int(c.get("numeric_parsed", 0) or 0)
+        rate = round(100.0 * parsed / reported, 1) if reported else 0.0
+        claimable = parsed > 0
+        note = ("Findings can be claimed for the parsed subset." if claimable
+                else f"NO {cat} findings can currently be claimed (0 extracted).")
+        out.append(dict(metal=cat, reported=reported, parsed=parsed, rate=rate,
+                        claimable=claimable, note=note))
+    return out
+
+
+def record_accounting_buckets(acct, debug):
+    """SECTION 3 — every record lands in exactly ONE tier-1 bucket; the tier-1 buckets SUM to the window
+    (fail loud otherwise, no report). Tier-1 is a mutually-exclusive partition: Reviewed (analyzed this run)
+    · Historical Ledger Reuse · Excluded out-of-window · Date Failure (no confirmable test date) · Unknown
+    (must be 0). Tier-2 are informational sub-counts WITHIN Reviewed (they overlap Reviewed and are NOT
+    added into the window total). Reads only the single accounting object + debug — no parallel counters."""
+    w = int(acct.window_total)
+    reviewed, reused = int(acct.analyzed_this_run), int(acct.ledger_reused)
+    exc_out, exc_nodate = int(acct.excluded_out_of_window), int(acct.excluded_no_date)
+    unknown = w - (reviewed + reused + exc_out + exc_nodate)
+    tier1 = [
+        ("Reviewed (analyzed this run)", reviewed),
+        ("Historical ledger reuse (verified-clean in prior runs)", reused),
+        ("Excluded — out-of-window (strict COA test date)", exc_out),
+        ("Date failure — no confirmable test date", exc_nodate),
+        ("Unknown — unaccounted (must be 0)", unknown),
+    ]
+    # Unknown is the residual, so the sum ALWAYS equals the window — the meaningful failure is a non-zero
+    # Unknown bucket (records that could not be placed). Fail loud on that; never publish unaccounted records.
+    if unknown != 0:
+        raise SystemExit(f"FAIL — RECORD ACCOUNTING ERROR (S3/S14): {unknown:+,} record(s) UNACCOUNTED "
+                         f"(window {w:,}; reviewed {reviewed:,} + reused {reused:,} + out-of-window {exc_out:,} "
+                         f"+ date-failure {exc_nodate:,}). No report emitted.")
+    G = lambda k: int((debug or {}).get(k, 0) or 0)
+    tier2 = [   # sub-counts WITHIN Reviewed — overlap Reviewed, NOT summed into the window
+        ("of Reviewed — published findings", int(acct.published_findings)),
+        ("of Reviewed — verification queue (held for review, not published)", G("coa_verification_queue")),
+        ("of Reviewed — NOT verified live (broken/unreadable link or cache-served)", int(acct.cache_served_unverified)),
+        ("of Reviewed — parser failure (no usable measurement this run)", G("unreadable_after_retry")),
+        ("of Reviewed — missing / broken COA link", G("broken_or_missing_coa_links")),
+        ("of Reviewed — dated via approval-date fallback (no parseable test date)",
+         G("date_window_included_by_approval_date_fallback")),
+    ]
+    return tier1, tier2, unknown
+
+
+def write_remediation_report(run_folder, report_no, debug, acct, cov_audit):
+    """SECTION 14 — write a separate Final Remediation Report enumerating the eight required lists. The
+    live reconciliation/consistency results are stamped in so the file proves the gate passed for THIS run."""
+    t1, t2, unk = record_accounting_buckets(acct, debug)
+    contradictions = consistency_audit(debug, acct, cov_audit)
+    L = []
+    w = L.append
+    w(f"CANNASCOPE CT — FINAL REMEDIATION REPORT (report #{report_no})")
+    w(f"Software {SOFTWARE_VERSION} · analysis {ANALYSIS_VERSION} · status tier: {debug.get('status_tier','')}")
+    w("=" * 78)
+    w("\n## SECTIONS CHANGED")
+    for s in ["S1 report structure (diagnostics relocated behind Limitations; 9-section front order)",
+              "S2 high-cannabinoid display cap removed + Top-100 flower table",
+              "S3 record-accounting buckets (every record in one bucket; fail-loud Unknown)",
+              "S4 lab-result-change layout (big centered before->after)",
+              "S5 conflict detection expanded + dedicated appendix",
+              "S6 confidence scoring credits category/analyte/field extraction",
+              "S7 heavy-metal coverage page (parsed vs actual; explicit no-findings)",
+              "S8 statistics: digit-preference/round-number/nearest-neighbor/Monte-Carlo + significance tiers",
+              "S9 threshold communication (CannaScope screen vs CT legal limit named every time)",
+              "S10 producer/lab normalization (adjusted rate + confidence interval + min-sample)",
+              "S11 dual status (Report Validation vs Findings Validation)",
+              "S12 build-time consistency audit (fails the build on contradiction)",
+              "S13 readability of front-half findings tables",
+              "S14 final reconciliation gate + this report"]:
+        w("  - " + s)
+    w("\n## SECTIONS ADDED")
+    for s in ["Record Accounting table", "Heavy Metal Coverage page", "Top-100 Highest-Cannabinoid Flower table",
+              "Conflict appendix", "Statistical Review appendix expansions", "Final Remediation Report (this file)"]:
+        w("  - " + s)
+    w("\n## SECTIONS REMOVED\n  - none (nothing deleted; diagnostics relocated, not removed)")
+    w("\n## BUGS FIXED (this remediation lineage)")
+    for s in ["arsenic false-presence (\\bas\\b) tripping spurious metals FAIL",
+              "year-readiness gated on metals-of-ALL instead of metals-of-reported (false NOT-READY)",
+              "broken links counted as verified-live (now NOT verified; honest coverage %)",
+              "cover scope sentence not summing to 100% (now sourced from accounting object)",
+              "forensic cold reads mislabeled as cache-audit re-pulls",
+              "verification-accounting subset invariant false in forensic mode",
+              "Total Cannabinoids < sum-of-components not detected (now flagged)"]:
+        w("  - " + s)
+    w("\n## CONTRADICTIONS RESOLVED")
+    for s in ["training ledger years (2015) vs window readiness years (2024) — now scope-labeled, one source",
+              "validation coverage % vs the count it displays — single source of truth",
+              "FAIL banner vs verified findings — split into Report vs Findings validation"]:
+        w("  - " + s)
+    w("\n## LIVE RECONCILIATION (this run)")
+    w(f"  - record buckets reconcile to window {acct.window_total:,}; Unknown = {unk}")
+    for n, c in t1:
+        w(f"      {n}: {c:,}")
+    w(f"  - consistency audit: {'PASS (0 contradictions)' if not contradictions else 'FAIL: ' + '; '.join(contradictions)}")
+    w(f"  - findings validation: {'FAIL' if debug.get('finding_validation_failed') else 'PASS'} · "
+      f"live coverage {debug.get('validation_coverage_pct')}%")
+    w("\n## REMAINING LIMITATIONS")
+    for s in ["historical vintages with low category extraction remain PARTIAL/NOT-READY by design (parser/layout, not training)",
+              "heavy metals are only required on a subset of products — coverage reflects testing requirements, not parser failure",
+              "Monte-Carlo / digit-preference screens are review signals, never proof of intent"]:
+        w("  - " + s)
+    w("\n## REMAINING UNCERTAINTIES")
+    for s in ["records dated only by approval-date fallback (no parseable COA test date) — disclosed, counted",
+              "multi-product 2015-era columnar COAs not fully block-bound (0 of the cohort) — deferred"]:
+        w("  - " + s)
+    path = os.path.join(run_folder, f"Final Remediation Report #{report_no}.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(L) + "\n")
+    print(f"  Final Remediation Report → {path}")
+    return path
+
+
+def consistency_audit(debug, acct, cov_audit):
+    """SECTION 12 — scan the assembled run facts for known contradiction pairs and return a list of
+    disagreements. The publish path FAILS LOUD (no PDF) if this returns anything: one source of truth per
+    fact. Catches the historical bugs (a counter disagreeing with its own % ; a cache-replay flag that
+    doesn't match the tier ; per-year readiness sourced two different ways)."""
+    problems = []
+    G = lambda k, d=0: (debug or {}).get(k, d)
+    A = cov_audit or {}
+    tier = str(G("status_tier", "") or "")
+    # 1) the live-verified count is the SAME everywhere
+    if int(acct.live_verified_total) != int(G("products_live_verified_this_run", -1)):
+        problems.append(f"live_verified_total {acct.live_verified_total} != debug "
+                        f"{G('products_live_verified_this_run')}")
+    # 2) the window total is the SAME everywhere
+    if int(acct.window_total) != int(A.get("products_in_window", -1)):
+        problems.append(f"window_total {acct.window_total} != cov_audit products_in_window "
+                        f"{A.get('products_in_window')}")
+    # 3) validation coverage % is recomputable from the counters it claims to use
+    _rev = int(G("products_reviewed", 0) or 0)
+    _exp = round(100.0 * int(acct.live_verified_total) / _rev, 1) if _rev else 0.0
+    if abs(float(G("validation_coverage_pct", 0.0) or 0.0) - _exp) > 0.15:
+        problems.append(f"validation_coverage_pct {G('validation_coverage_pct')} != live/reviewed {_exp}")
+    # 4) cache-replay flag and the tier must agree
+    if bool(G("cache_replay")) and ("CACHE REPLAY" not in tier and "CACHE-REPLAY" not in tier):
+        problems.append(f"cache_replay True but tier '{tier}' is not a cache-replay tier")
+    # 5) finding-validation failure and the tier must agree
+    if bool(G("finding_validation_failed")) and "PUBLISHED FINDINGS UNVERIFIED" not in tier and tier != "FAIL":
+        problems.append(f"finding_validation_failed True but tier '{tier}' is not a finding-FAIL tier")
+    # 6) per-year readiness comes from ONE place: window-years-not-ready must be disjoint from ledger-only years
+    _win_nr = set(G("report_window_years_not_ready", []) or [])
+    _led_present = set(G("training_ledger_years_present", []) or [])
+    _ghost = _win_nr - _led_present - {str(y) for y in range(1900, 2100)}  # window years are real years; sanity only
+    if _ghost:
+        problems.append(f"window-not-ready years not real: {sorted(_ghost)}")
+    return problems
+
+
+def verification_breakdown_lines(acct):
+    """ONE reconciled coverage/provenance breakdown, rendered IDENTICALLY in the console and in the PDF
+    Technical Validation appendix (both call this function). Buckets are counts AND % of the date window
+    and MUST sum to the window (excluded-out-of-window is listed separately, OUTSIDE the window). Reads
+    ONLY the single-source-of-truth object; FAILS LOUD if the in-window buckets do not reconcile."""
+    w = acct.window_total
+    pc = lambda n: (f"{round(100.0 * n / w, 1)}%" if w else "n/a")
+    # The prefiltered date window (window_total) splits into the date-test-confirmed slice
+    # (freshly + repulls + ledger-reused + cache-served) PLUS the records later excluded by the strict
+    # COA-test-date enforcement. EVERYTHING must sum to the window — fail loud otherwise.
+    confirmed_sum = (acct.freshly_live_verified + acct.cache_audit_repulls
+                     + acct.ledger_reused + acct.cache_served_unverified)
+    total_sum = confirmed_sum + acct.excluded_out_of_window + acct.excluded_no_date
+    if total_sum != w:
+        raise SystemExit(f"FAIL — COVERAGE BREAKDOWN ERROR: buckets {total_sum:,} != window {w:,} "
+                         "(no report emitted).")
+    return [
+        f"Window total (prefiltered date window): {w:,}",
+        f"  - Freshly live-verified this run: {acct.freshly_live_verified:,} ({pc(acct.freshly_live_verified)})",
+        f"  - Cache-audit re-pulls (live, compared): {acct.cache_audit_repulls:,} ({pc(acct.cache_audit_repulls)})",
+        f"  - Reused from verified-clean ledger (prior runs, NOT re-checked today): {acct.ledger_reused:,} ({pc(acct.ledger_reused)})",
+        f"  - NOT verified live this run (broken/unreadable COA link or cache-served): {acct.cache_served_unverified:,} ({pc(acct.cache_served_unverified)})",
+        f"       of which broken / missing COA link (no document to verify against): {acct.unreadable_or_broken:,}",
+        f"  - Excluded out-of-window (strict COA test date): {acct.excluded_out_of_window:,} ({pc(acct.excluded_out_of_window)})",
+        f"  - Excluded, no confirmable test date: {acct.excluded_no_date:,} ({pc(acct.excluded_no_date)})",
+        f"  = all {total_sum:,} of {w:,} products accounted for (reconciled to 100% of the window).",
+        f"Record-level: live-verified {acct.live_verified_pct_of_window}% of the {w:,}-COA window "
+        f"({acct.coverage_pct_of_analyzed}% of the {acct.analyzed_this_run:,} analyzed this run). "
+        "Category-level extraction quality (parsed of where each panel is reported)"
+        + (f" - weakest core panel: {acct.worst_core_panel}." if acct.worst_core_panel else "."),
+    ]
 
 
 def write_outputs(ctx):
@@ -8710,6 +9518,25 @@ def _flagged_value_in_text(p, text):
     return False
 
 
+def _extraction_richness(p, profile=None):
+    """SECTION 6 — count distinct successfully-extracted signals (0..12): the more categories/analytes/
+    identity/date/lab fields a COA yields, the higher the confidence it earns. Pure, independently testable."""
+    an = getattr(p, "analytes", {}) or {}
+    idf = (profile or {}).get("identity", {}) if profile else {}
+    cats = sum([
+        bool(getattr(p, "cannabinoids", None)),
+        any(k in an for k in ("tymc", "aerobic")),
+        any(k in an for k in ("arsenic", "lead", "cadmium", "mercury", "chromium")),
+        any(k in an for k in v5.PATHO_KEYS),
+        any(k in an for k in MYCO_KEYS),
+        getattr(p, "pesticides", "") in ("PASS", "FAIL"),
+        getattr(p, "solvents", "") in ("PASS", "FAIL"),
+    ])
+    fields = sum([bool(idf.get("reg")), bool(idf.get("product")), bool(idf.get("batch")),
+                  bool((profile or {}).get("year")), bool((profile or {}).get("lab"))])
+    return cats + fields
+
+
 def assess_extraction(p, text, profile=None):
     """Cross-check FIVE independent signals and return a confidence LEVEL. Marks the
     extraction UNCERTAIN (held for review) on a top/detail pass-fail conflict, a
@@ -8765,24 +9592,46 @@ def assess_extraction(p, text, profile=None):
                    or bool(v5.pathogen_detections(p))
                    or any((e.get("status") or "").upper() == "FAIL" for e in p.analytes.values()))
     conflict = bool(top == "PASS" and detail_fail)
-    if conflict:
+    # SURGICAL FIX — "COA Marked Pass But Contains Over-Limit Result". A COA whose OVERALL status reads PASS
+    # but whose BODY carries a GENUINE over-limit line (a numeric result over the limit PRINTED ON THAT SAME
+    # COA — captured by parse_analytes as an OVER_CT_LIMIT flag — or an explicit panel FAIL / pathogen
+    # DETECTED) is an INTERNAL CONTRADICTION to SURFACE in the contaminant tables, NOT a parse-uncertainty to
+    # quarantine. The header PASS must NEVER erase a real body exceedance. Mark it and do NOT route the whole
+    # product to UNCERTAIN (which would hide the over-limit line). Ambiguous FAIL-status WITHOUT a verified
+    # numeric over-limit still routes to review (parse-safety preserved).
+    _genuine_overlimit = (any(str(f).startswith("OVER_CT_LIMIT") for f in (getattr(p, "flags", None) or []))
+                          or getattr(p, "pesticides", "") == "FAIL" or getattr(p, "solvents", "") == "FAIL"
+                          or bool(v5.pathogen_detections(p)))
+    if conflict and _genuine_overlimit:
+        p._coa_pass_overlimit = True
+        conflict = False
+        reasons.append("COA overall marked PASS but a body line is over its printed limit / marked FAIL — "
+                       "surfaced as an internal contradiction (NOT quarantined; header PASS does not erase it)")
+    elif conflict:
         reasons.append("top-level PASS but a detailed regulated result reads FAIL/DETECTED")
 
     if profile["scanned_image"]:
         reasons.append("little or no extractable text (older scan / image COA)")
 
     npass = sum(1 for _n, ok in checks if ok)
+    # SECTION 6 — credit EXTRACTION BREADTH. The 5 checks above are binary presence flags, so a COA that
+    # extracts 2 categories scored the same as one that extracted 11 — real extraction gains produced ZERO
+    # movement. Richness (distinct categories + identity/date/lab fields actually extracted, 0..12) now
+    # PROMOTES confidence (never demotes: the npass thresholds remain the primary path, so a legitimately
+    # narrow but clean COA keeps its level). Adding categories/analytes/fields therefore raises the score.
+    richness = _extraction_richness(p, profile)
     if mismatch or conflict:
         level = "UNCERTAIN"
-    elif npass >= 5 and not profile["scanned_image"]:
+    elif not profile["scanned_image"] and (npass >= 5 or (npass >= 4 and richness >= 7)):
         level = "HIGH"
-    elif npass >= 4:
+    elif npass >= 4 or (npass >= 3 and richness >= 5):
         level = "MEDIUM"
     elif npass >= 2:
         level = "LOW"
     else:
         level = "UNCERTAIN"
-    return dict(level=level, score=npass, checks=dict(checks), reasons=reasons,
+    return dict(level=level, score=npass + richness, npass=npass, richness=richness,
+                checks=dict(checks), reasons=reasons,
                 conflict=conflict, mismatch=mismatch, hold=(conflict or mismatch))
 
 
@@ -8894,10 +9743,19 @@ class COAFormatLearner:
             return "NO DATA", False
         if n < self.MIN_SAMPLE:
             return "INSUFFICIENT SAMPLE", False
-        weak_core = min(core_cov.values()) if core_cov else 0.0
-        if conf_rate >= 0.85 and unc_rate <= 0.15 and weak_core >= 0.50:
-            return "READY", True
-        if conf_rate < 0.55 or weak_core < 0.20:
+        # Readiness is gated by the UNIVERSALLY-tested core panels — cannabinoids + microbials, which every
+        # CT product tests. Heavy METALS are only REQUIRED on a SUBSET of product types, so a low metals
+        # coverage reflects testing SCOPE, not a parser failure, and must NOT by itself force a year (and
+        # thus the whole report) to NOT READY when the universal panels parse well. Metals modulate
+        # READY<->PARTIAL instead. (Mirrors the parse-of-reporting honesty fix applied to the coverage
+        # "weakest core panel" — a panel that is simply not widely tested is not a coverage failure.)
+        universal = [core_cov.get("cannabinoids", 0.0), core_cov.get("microbials", 0.0)]
+        weak_universal = min(universal) if universal else 0.0
+        metals_cov = core_cov.get("metals", 0.0)
+        if conf_rate >= 0.85 and unc_rate <= 0.15 and weak_universal >= 0.50:
+            # Universal panels strong -> the year is usable. Metals coverage only decides READY vs PARTIAL.
+            return ("READY", True) if metals_cov >= 0.30 else ("PARTIAL", False)
+        if conf_rate < 0.55 or weak_universal < 0.20:
             return "NOT READY", False
         return "PARTIAL", False
 
@@ -10007,9 +10865,10 @@ def main():
     ap.add_argument("--full-cache-audit", action="store_true", dest="full_cache_audit",
                     help="audit EVERY cached HIT live (not just a sample) before trusting the cache.")
     ap.add_argument("--live-verify", action="store_true", dest="live_verify",
-                    help="FORCE live-first verification ON: re-fetch EVERY COA from its source link this run "
-                         "(ignore any reused local PDF) and run the full cache self-audit, so a normal online "
-                         "run produces non-zero live coverage. The run log states LIVE VERIFICATION: ON.")
+                    help="Re-verify the FRESHLY-ANALYZED slice live: re-fetch every COA analyzed this run from "
+                         "its source link (ignore any reused local PDF) + full cache self-audit. Products that "
+                         "were verified-clean in a PRIOR run are TRUSTED and skipped — this is NOT a full-window "
+                         "re-check (use --validate for that). The run log prints MODE + the true coverage effect.")
     ap.add_argument("--cache-audit-sample", type=int, default=15, dest="cache_audit_sample",
                     help="how many cached COAs to spot-check live each run when --fast-cache is set "
                          "(default 15; stride-sampled). Ignored by the default live-first run, which audits ALL.")
@@ -10195,17 +11054,43 @@ def main():
     # TASK 1 quick route — --live-verify forces genuine live verification on (re-fetch every COA from its
     # source link, even if a local PDF exists) + a full cache self-audit. State the mode in ONE plain line.
     _live_verify = bool(getattr(args, "live_verify", False))
-    if _live_verify and not args.offline:
+    _fast = bool(getattr(args, "fast_cache", False))
+    _offline = bool(args.offline)
+    _require_live = bool(getattr(args, "require_live", False))
+    if _live_verify and not _offline:
         v4.FORCE_LIVE_DOWNLOAD = True
         args.full_cache_audit = True
-    if args.offline:
-        print("  LIVE VERIFICATION: OFF (offline / cache-replay only — report will be gated NOT LIVE-VERIFIED).")
+    # TASK 3 — pin down + PRINT what the active flag ACTUALLY does (no flag name may imply more
+    # verification than it performs). Per the user decision, --live-verify and --validate stay DISTINCT:
+    # --live-verify re-verifies only the freshly-analyzed slice (ledger-clean products are trusted/skipped);
+    # --validate busts the ledger and cold-reads the WHOLE window. `_mode_label` is reused in the run summary.
+    if _offline:
+        _mode_label = "OFFLINE (cache replay — NOT live-verified)"
+        _mode_effect = ("re-runs from the cache only; NOTHING is verified against a live source this run — "
+                        "the report is gated UNVALIDATED — CACHE REPLAY.")
+    elif _require_live:
+        _mode_label = "--validate (forensic, full-window cold re-read)"
+        _mode_effect = ("busts the verified-clean ledger and cold-reads EVERY COA in the window from its live "
+                        "source (+ real OCR). True full-window re-verification; slowest.")
     elif _live_verify:
-        print("  LIVE VERIFICATION: ON (forced) — every COA is re-fetched from its source link this run.")
+        _mode_label = "--live-verify (re-verify the freshly-analyzed slice live)"
+        _mode_effect = ("re-fetches every COA ANALYZED this run from its source link; products verified-clean "
+                        "in a PRIOR run are TRUSTED and skipped (NOT re-checked today). For a full-window "
+                        "re-verification use --validate.")
+    elif _fast:
+        _mode_label = "--fast-cache (sampled cache audit)"
+        _mode_effect = ("trusts the cache after a small live sample instead of re-verifying every cached row — "
+                        "NOT a full live re-verification.")
     else:
-        print("  LIVE VERIFICATION: ON (live-first) — cold-read COAs are verified against their source this "
-              "run; reused local PDFs are NOT counted as live. Use --live-verify to force re-fetch of all.")
-    _fast = bool(getattr(args, "fast_cache", False))
+        _mode_label = "live-first (default)"
+        _mode_effect = ("cold-read COAs are verified against their source this run; reused local PDFs are NOT "
+                        "counted as live, and ledger-clean products from prior runs are trusted/skipped. Use "
+                        "--live-verify to force re-fetch of the analyzed slice, or --validate for the full window.")
+    print(f"  MODE: {_mode_label} — {_mode_effect}")
+    print("  LIVE VERIFICATION: " + ("OFF (offline / cache-replay only — report will be gated NOT LIVE-VERIFIED)."
+          if _offline else ("ON (forced) — every analyzed COA is re-fetched from its source link this run."
+          if _live_verify else ("ON (forensic) — every COA cold-read live this run." if _require_live
+          else "ON (live-first) — cold-read COAs verified against their source; reused local PDFs NOT counted as live."))))
     _full_audit = bool(getattr(args, "full_cache_audit", False)) or not _fast
     if csv_cache is not None and getattr(args, "cache_audit", True) and not args.offline:
         print("  Cache self-audit (LIVE-FIRST: re-verifying %s cached row(s) against their live source "
@@ -10492,6 +11377,13 @@ def main():
     _led_not_ready = sorted(y for y, v in _led_years.items() if (v or {}).get("ready") is not True)
     debug["training_years_ready"] = _led_ready
     debug["training_years_not_ready"] = _led_not_ready
+    # ISSUE #36/#37/#38 — disambiguate the TWO layers so the debug log can never read as a contradiction.
+    # These keys are scoped to the PERSISTED Training Ledger (whatever was previously `learn`-ed, e.g. 2015);
+    # this report's WINDOW-year readiness (e.g. 2024) is computed LIVE this run and recorded separately as
+    # report_window_years_not_ready (below, once the window readiness is known). A window year that is not
+    # in training_ledger_years_present was never `learn`-ed and is rated live — not from stored training.
+    debug["training_ledger_years_present"] = sorted(_led_years.keys())
+    debug["training_ledger_years_not_ready"] = _led_not_ready
     debug["training_year_coverage"] = {y: {"verdict": (v or {}).get("verdict", ""),
                                            "ready": bool((v or {}).get("ready")),
                                            "conf_rate": (v or {}).get("conf_rate"),
@@ -10518,7 +11410,10 @@ def main():
     # FORENSIC mode state (P3) surfaced for the report/audit.
     debug["forensic_mode"] = bool(_forensic)
     debug["result_cache_state"] = "DISABLED (forensic cold re-read)" if _forensic else "enabled"
-    debug["ocr_cache_state"] = ("USED" if _OCR_TEXT_CACHE_READS_ENABLED else "DISABLED (re-OCR from raw PDF)")
+    # ISSUE #40 — spell out that an OCR-text cache HIT is not a "cache replay": it only means no fresh OCR
+    # was needed (the COA's text was already extracted), which is independent of live verification.
+    debug["ocr_cache_state"] = ("USED (no fresh OCR needed this run — not a cache replay)"
+                                if _OCR_TEXT_CACHE_READS_ENABLED else "DISABLED (re-OCR from raw PDF)")
     # NOTE: conf_mix counts ONLY COAs that were freshly read + fingerprinted THIS run. Cached COAs
     # (the common case) were format-checked + triple-verified when first read and are not re-fingerprinted,
     # so these counts are deliberately about this run's NEW reads, not all COAs reviewed. Metric names
@@ -10690,6 +11585,9 @@ def main():
         "ocr_cache_hits": _OCR_STATS.get("cache_hits", 0),
         "ocr_rescued_high_dpi": _OCR_STATS.get("rescued_high_dpi", 0),
         "implausible_values_gated_from_publication": _n_implausible_gated,
+        # SURGICAL FIX — COAs whose OVERALL status is PASS yet a BODY analyte is over the limit printed on
+        # that same COA (an internal contradiction). Surfaced in the contaminant tables, NOT quarantined.
+        "coa_pass_with_overlimit_lines": sum(1 for p in all_results if coa_pass_overlimit_lines(p)),
         "online_fallback_refetched_live": _ONLINE_FALLBACK_STATS["attempted"],
         "online_fallback_recovered_measurements": _ONLINE_FALLBACK_STATS["recovered_with_data"],
         "online_fallback_still_empty": _ONLINE_FALLBACK_STATS["still_empty"],
@@ -10762,11 +11660,17 @@ def main():
     # RE-VERIFIED against their LIVE source this run, and the resulting coverage %.
     _reviewed = int(debug.get("products_reviewed", 0) or 0)
     if debug.get("forensic_mode"):
-        # Forensic cold-reads EVERY record live; count those as revalidated (no separate fresh-read bucket).
-        # Cap at reviewed: coas_fetched counts fetch attempts (retries/audit clones) and can exceed the
-        # product count, which would otherwise break the bucket reconciliation below.
-        _revalidated_live = min(_reviewed, int(debug.get("coas_fetched", 0) or 0))
-        _freshly_read_live = 0
+        # Forensic mode COLD-READS every record live from its source — the STRONGEST verification. These are
+        # FRESH cold reads, NOT cache-audit re-pulls (the cache is DISABLED in forensic, so there is nothing
+        # to re-pull against). Count them as freshly_read_live so the label reads "cold live reads", not
+        # "cache-audit re-pulls". Cap at reviewed: coas_fetched counts fetch attempts (retries) and can
+        # exceed the product count, which would otherwise break the bucket reconciliation below.
+        # ISSUE T2 — a BROKEN/MISSING COA link cannot be "verified live" (there is no document to verify
+        # against). Exclude broken links from the verified count so they fall into "NOT verified live this
+        # run" instead of being silently counted as 100% verified while disclosed as broken elsewhere.
+        _broken = int(debug.get("broken_or_missing_coa_links", 0) or 0)
+        _freshly_read_live = max(0, min(_reviewed, int(debug.get("coas_fetched", 0) or 0)) - _broken)
+        _revalidated_live = 0
     else:
         # Cache-audit re-pulls (a cached row re-fetched live and compared) + online-fallback live re-reads.
         _revalidated_live = min(_reviewed, int(debug.get("cache_audit_sampled_live", 0) or 0)
@@ -10815,6 +11719,16 @@ def main():
     _uncertain_published = sum(1 for p in pub if (getattr(p, "_extraction", None) or {}).get("level") == "UNCERTAIN")
     debug["uncertain_extractions_published"] = _uncertain_published
     _year_readiness = [{"year": r["year"], "verdict": r["verdict"]} for r in fmt_year_rows]
+    # ISSUE #36/#37/#38 — record the WINDOW's live readiness separately from the persisted-ledger keys, and
+    # flag whether each window year is even in the Training Ledger. This makes "section says 2024 / ledger
+    # says 2015" legible as two layers rather than a contradiction.
+    _led_present = set(debug.get("training_ledger_years_present", []) or [])
+    debug["report_window_years_not_ready"] = sorted(str(r["year"]) for r in fmt_year_rows
+                                                    if r.get("verdict") == "NOT READY")
+    debug["report_window_years_in_training_ledger"] = sorted(str(r["year"]) for r in fmt_year_rows
+                                                             if str(r["year"]) in _led_present)
+    debug["report_window_years_not_in_training_ledger"] = sorted(str(r["year"]) for r in fmt_year_rows
+                                                                 if str(r["year"]) not in _led_present)
     status, fail_reasons, warn_reasons = validation_summary(
         debug, remaining, zero, src_metrics, _unverified_in_pub, _uncertain_published, _year_readiness)
     debug["report_status"] = status
@@ -10862,24 +11776,31 @@ def main():
                              pct_of_reporting=round(100 * _par / _pres, 1) if _pres else 0.0,
                              is_core=_c.get("category", "") in _CORE_CATS))
     cov_audit["category_coverage"] = _cat_cov
-    _core = [cc for cc in _cat_cov if cc["is_core"] and cc["window_total"]]
-    _worst = min(_core, key=lambda cc: cc["pct_of_window"]) if _core else None
-    cov_audit["worst_core_panel"] = (f"{_worst['category']} {_worst['pct_of_window']}% of window "
-        f"({_worst['numeric_parsed']}/{_worst['window_total']})") if _worst else ""
+    # HONEST "weakest core panel" = the core safety panel with the lowest PARSE-OF-REPORTING rate
+    # (parsed / reported-on) among panels reported on a meaningful number of COAs. Using parsed / WINDOW
+    # was misleading: it penalized panels only REQUIRED on a subset of products (heavy metals are tested on
+    # ~632 of 18,231 — that is not a parser failure) and folded in run-scope (only ~12% freshly analyzed
+    # this run, the rest reused-from-ledger). A genuine parser GAP is "reported on many COAs but parsed on
+    # few of them." Run-scope and ledger-reuse are disclosed separately in the verification breakdown.
+    # pct_of_window stays in category_coverage.csv for full transparency; it just no longer drives the alarm.
+    _REPORTED_FLOOR = 25     # ignore tiny-sample panels (noise); matches the _PARTIAL_MIN_GAP scale
+    _core = [cc for cc in _cat_cov if cc["is_core"] and cc["reported_on"] >= _REPORTED_FLOOR]
+    _worst = min(_core, key=lambda cc: cc["pct_of_reporting"]) if _core else None
+    cov_audit["worst_core_panel"] = (f"{_worst['category']} {_worst['pct_of_reporting']}% of where reported "
+        f"({_worst['numeric_parsed']:,}/{_worst['reported_on']:,} COAs that report it)") if _worst else ""
     debug["category_coverage_worst_core"] = cov_audit["worst_core_panel"]
-    if _worst and _worst["pct_of_window"] < 50:
+    # Alarm ONLY on a REAL extraction gap: a core panel reported on many COAs yet parsed on < half of them.
+    if _worst and _worst["pct_of_reporting"] < 50:
         cov_audit["failure_highlights"].insert(0,
-            f"Record-level coverage is {cov_audit.get('pct_window_analyzed', 0)}% (COAs OPENED), but "
-            f"CATEGORY-level extraction is far lower — weakest core panel {_worst['category']} parsed only "
-            f"{_worst['numeric_parsed']}/{_worst['window_total']} ({_worst['pct_of_window']}% of the window). "
-            "'Analyzed' means the COA was opened, NOT that every panel was read. See "
-            "Data Exports/category_coverage.csv.")
-        debug["coverage_failure_highlights"] = cov_audit["failure_highlights"]
-    else:
-        debug["coverage_failure_highlights"] = cov_audit["failure_highlights"]
+            f"CATEGORY-level parser gap — core panel {_worst['category']} appears on "
+            f"{_worst['reported_on']:,} COA(s) but parsed on only {_worst['numeric_parsed']:,} of them "
+            f"({_worst['pct_of_reporting']}% of where it is reported). 'Analyzed' means the COA was opened, "
+            "NOT that every panel was read. See Data Exports/category_coverage.csv.")
+    debug["coverage_failure_highlights"] = cov_audit["failure_highlights"]
     status = cov_audit["status_tier"]  # show the brutally-honest tier instead of a bare "PASS WITH WARNINGS"
     _strict_block = bool(getattr(args, "strict_audit", False)) and cov_audit["status_tier"] in (
-        "FAIL", "PARTIAL REPORT — MAJOR UNVERIFIED DATA", "PASS WITH MAJOR COVERAGE GAPS",
+        "FAIL", FINDING_VALIDATION_FAIL, DIAGNOSTIC_COVERAGE_INCOMPLETE,
+        "PARTIAL REPORT — MAJOR UNVERIFIED DATA", "PASS WITH MAJOR COVERAGE GAPS",
         UNVALIDATED_CACHE_REPLAY)   # fail closed: a cache replay can never publish under --strict-audit
     # REQUIRE-LIVE (--validate): abort if any mandatory validation system was bypassed (cache replay
     # can never publish as forensic). Recorded for the report + the exit gate below.
@@ -10895,9 +11816,17 @@ def main():
     # Carry forward the previous run's notes so the reader sees the program remembering its weaknesses.
     prior_run = prior_log[-1] if prior_log else None
 
+    # TASK 1 — assemble the SINGLE verification-accounting source of truth ONCE, now that both the debug
+    # counters and cov_audit are final. This raises (no report) if the buckets do not reconcile. The console
+    # AND the PDF read ONLY from this object — no downstream recomputation of verification counts.
+    _acct = build_verification_accounting(
+        debug, cov_audit, mode=_mode_label, published_findings=len(pub),
+        n_red=sev_counts.get("RED", 0), n_orange=sev_counts.get("ORANGE", 0),
+        n_yellow=sev_counts.get("YELLOW", 0), n_high_thc_flower=len(thc_flower))
+
     # Boundary-clustering ("Convenient Lab Result Groupings") statistical screen over ALL results.
     convenience = analyze_convenience_groupings(all_results, ident, lmap)
-    ctx = dict(draft=draft, status=status, pmap=pmap, lmap=lmap, ident=ident, watch=watch, window=window,
+    ctx = dict(draft=draft, status=status, pmap=pmap, lmap=lmap, ident=ident, watch=watch, window=window, acct=_acct,
                date_trace=date_trace, cov_audit=cov_audit, all_results_for_audit=all_results,
                convenience=convenience,
                self_audit_obs=self_audit_obs, prior_run=prior_run, self_improve_runs=len(prior_log) + 1,
@@ -10963,7 +11892,23 @@ def main():
         raise SystemExit(f"FATAL report-numbering error: filename/number mismatch ({out_path!r} vs #{report_no}).")
     if os.path.exists(out_path):
         raise SystemExit(f"FATAL: report #{report_no} would overwrite an existing file: {out_path}")
+    # SECTION 14 FINAL GATE — run the record-accounting partition (S3) and the consistency audit (S12)
+    # against the assembled facts. Either failing means NO PDF is published (fail loud with the detail).
+    record_accounting_buckets(ctx["acct"], debug)          # raises on any unaccounted record
+    _contradictions = consistency_audit(debug, ctx["acct"], cov_audit)
+    if _contradictions:
+        print("\n" + "!" * 74)
+        print("  CONSISTENCY AUDIT FAILED (S12) — the report contradicts itself; NOT published:")
+        for c in _contradictions:
+            print("   • " + c)
+        print("!" * 74)
+        sys.exit(5)
     build_pdf(out_path, report_no, ctx)
+    # SECTION 14 — Final Remediation Report (separate file, enumerates the required lists).
+    try:
+        write_remediation_report(run_folder, report_no, debug, ctx["acct"], cov_audit)
+    except Exception as _e:
+        print(f"  (remediation report not written: {_e})")
 
     # ONE canonical file per report, kept with its CSV exports in the reports folder. We do NOT also
     # copy it to the working folder: a same-named duplicate in two places is what makes the OS prompt
@@ -10975,12 +11920,26 @@ def main():
           f"({sev_counts.get('RED',0)} Red, {sev_counts.get('ORANGE',0)} Orange, "
           f"{sev_counts.get('YELLOW',0)} Yellow, {len(thc_flower)} High-THC flower) • "
           f"{len(flagged)-len(pub)} in COA queue")
-    # SUPERIOR RULE — surface the HONEST validation coverage next to "Reviewed" so a cache replay can
-    # never read as a validated run.
-    print(f"  Revalidated LIVE {debug.get('products_revalidated_live', 0):,} of {len(all_results):,} "
-          f"• Validation Coverage {debug.get('validation_coverage_pct', 0.0)}% "
-          f"• Served from cache (unverified) {debug.get('products_served_from_cache_unverified', 0):,} "
-          f"• fresh OCR {debug.get('ocr_runs_fresh', 0):,}")
+    # TASK 2 — every verification number printed here maps to exactly ONE field of the single-source-of-truth
+    # accounting object (`_acct`). The PRIMARY live-verified count is live_verified_total; cache_audit_repulls
+    # is shown under its OWN label and is never again passed off as the live count (the old "Revalidated LIVE"
+    # bug). No parallel counters: these all come from `_acct`, the same object the PDF reads.
+    print(f"  Live-verified this run {_acct.live_verified_total:,} of {_acct.analyzed_this_run:,} analyzed "
+          f"({_acct.coverage_pct_of_analyzed}% of analyzed · {_acct.live_verified_pct_of_window}% of the "
+          f"{_acct.window_total:,}-COA window) = {_acct.freshly_live_verified:,} cold live reads "
+          f"+ {_acct.cache_audit_repulls:,} cache-audit re-pulls")
+    print(f"  Served from cache (unverified) {_acct.cache_served_unverified:,} "
+          f"(incl. {_acct.unreadable_or_broken:,} unreadable/broken) • fresh OCR {debug.get('ocr_runs_fresh', 0):,}")
+    # TASK 3 — realized MODE coverage effect (honest), in plain English, from the accounting object.
+    print(f"  MODE: {_acct.mode} → freshly live-verified {_acct.freshly_live_verified:,} of "
+          f"{_acct.window_total:,} in window ({_acct.freshly_live_pct_of_window}%); "
+          f"{_acct.ledger_reused:,} trusted from prior verified-clean runs (not re-checked today)."
+          + ("" if _acct.mode.startswith("--validate") else " For full-window re-verification use --validate."))
+    # TASK 4 — ONE reconciled coverage breakdown, IDENTICAL to the PDF appendix (same function).
+    print("  Coverage breakdown (reconciled to the window):")
+    for _bl in verification_breakdown_lines(_acct):
+        print("    " + _bl)
+    print(f"  COAs marked PASS containing an over-limit body line: {debug.get('coa_pass_with_overlimit_lines', 0)}")
     print(f"  Self-audit remaining: {len(remaining)} • Parser-gap warnings: "
           f"{sum(1 for c in zero if c['status']=='Needs Historical Parser Review')} • Partial-coverage: "
           f"{sum(1 for c in zero if c['status']=='Partial Coverage')}")

@@ -2,7 +2,35 @@
 
 All notable changes to this project are documented here.
 
-## V17.1.1 — current release
+## V17.2.0 — current release
+
+Biggest upgrade since V17 — credibility, completeness, and readability. ANALYSIS_VERSION → 17.2.0 (detection
+logic changed).
+
+**Over-limit-under-PASS surfacing.** A COA whose overall status reads PASS but whose body carries a genuine
+over-limit line (numeric result over the limit printed on that same COA, or a panel FAIL / pathogen DETECTED) is
+no longer quarantined as UNCERTAIN — it is published as an internal contradiction, flagged "COA Marked Pass But
+Contains Over-Limit Result," and surfaced in the analyte/contaminant tables, producer/lab aggregation, and a new
+summary section. Run log prints the self-discovered count.
+
+**Validation backbone.** Single-source verification accounting; Record Accounting bucket partition that fails
+loud on any unaccounted record; build-time consistency audit (`sys.exit(5)` on contradiction); a Final
+Remediation Report file written per run; dual Report-Validation vs Findings-Validation status on the cover.
+
+**New analyses.** Heavy Metal Coverage page (per-metal parsed-vs-actual; explicit no-findings on zero
+extraction); Top-100 highest-cannabinoid flower (uncapped); Inaccurate Laboratory Math Detection section;
+round-number / digit-preference / nearest-neighbor statistical screens with significance tiers; producer 95%
+confidence intervals + low-sample marking; cannabinoid math now flags Total Cannabinoids < component sum.
+
+**Fixes.** Year-readiness no longer forced NOT-READY by sparsely-tested metals (parsed-of-reported, not
+parsed-of-all); arsenic presence regex no longer matches the word "as"; confidence now credits extraction
+breadth.
+
+**Presentation.** A test date + clickable COA on every product row in every section; COA links no longer
+wrap/bleed; all tables fill the page width within reason (no compression, no overflow); big centered
+before→after in lab-result-change cases.
+
+## V17.1.1 
 
 Honesty + readability + added-analysis update. No measurement, threshold, limit, or finding logic changed
 (ANALYSIS_VERSION stays 17.0.0).

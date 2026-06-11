@@ -52,5 +52,27 @@ s_strong = M._cg_convenience_score(near=14, n=20, over=0, ratio=6.0, pval=0.0001
 if s_strong >= 75: ok(f"strong cliff group scores high: {s_strong}")
 else: _fails.append(f"strong group too low: {s_strong}"); print("FAIL ", _fails[-1])
 
+# ISSUE #20/#21 — significance GATES the score+band: a non-significant p never reads as real clustering.
+s_p089 = M._cg_convenience_score(near=14, n=391, over=0, ratio=2.0, pval=0.089, z=3.0,
+                                 round_cluster=0.0, low_n=False)
+if s_p089 < 50: ok(f"p=0.089 capped below 'Review recommended': {s_p089}")
+else: _fails.append(f"p=0.089 not capped: {s_p089}"); print("FAIL ", _fails[-1])
+eq("p>=0.05 band is 'not significant'", M._cg_score_band(49, 0.089),
+   "Not statistically significant (review lead only)")
+eq("p>=0.10 score capped to <=24",
+   min(99, M._cg_convenience_score(near=10, n=300, over=0, ratio=2.0, pval=0.259, z=2.5,
+                                   round_cluster=0.0, low_n=False)) <= 24, True)
+eq("significant strong group keeps clustering band", M._cg_score_band(80, 0.001), "Strong clustering")
+
+# --- S8/S10 screens (full remediation pass) ---
+eq("sig tier <0.001", M.significance_tier(0.0005), "highly significant (p<0.001)")
+eq("sig tier 0.2 not significant", "not statistically significant" in M.significance_tier(0.2), True)
+_lo, _hi = M._wilson_ci(5, 100)
+eq("wilson(5,100) brackets 5%", _lo <= 5 <= _hi, True)
+_ss = M.statistical_screens([97000, 98000, 99000] * 4 + [50000 + i * 137 for i in range(30)])
+eq("screens scored (not low-sample)", _ss.get("low_sample", False), False)
+eq("round-thousand rate > 0", _ss["round_thousand_rate"] > 0, True)
+eq("low-sample guard", M.statistical_screens([1, 2, 3]).get("low_sample"), True)
+
 print("\n" + ("ALL PASSED" if not _fails else f"{len(_fails)} FAILED"))
 raise SystemExit(1 if _fails else 0)
